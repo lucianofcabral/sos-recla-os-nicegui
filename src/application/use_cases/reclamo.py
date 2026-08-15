@@ -18,7 +18,11 @@ from src.domain.dto.edit import (
     ReclamoSosEdit,
     TresArrReclamoEdit,
 )
-from src.domain.exceptions import EntityNotFoundError
+from src.domain.exceptions import (
+    DomainError,
+    DuplicateEntityError,
+    EntityNotFoundError,
+)
 from src.domain.models.entities import (
     Grupo,
     Reclamo,
@@ -298,3 +302,32 @@ class ReclamoAlternarEstado:
             self._uow.reclamos.set_active(reclamo_id, not reclamo.active)
             self._uow.commit()
             return self._uow.reclamos.get(reclamo_id)
+
+
+class ActualizarGrupo:
+    """Rename a 3 Arroyos group: updates the Grupo record and every member."""
+
+    def __init__(self, uow: UnitOfWorkPort) -> None:
+        self._uow = uow
+
+    def __call__(self, grupo_id: int, nuevo_nombre: str | None) -> Grupo:
+        with self._uow:
+            nombre = normalizar_texto(nuevo_nombre or '')
+            assert nombre is not None
+            if not nombre:
+                raise DomainError('el nombre del grupo no puede estar vacío')
+            grupo = self._uow.grupos.get(grupo_id)
+            if nombre == grupo.grupo:
+                return grupo
+            existente = self._uow.grupos.get_by_nombre(nombre)
+            if existente is not None and existente.id != grupo_id:
+                raise DuplicateEntityError(f'ya existe un grupo llamado {nombre}')
+            updated = Grupo.model_validate({**grupo.model_dump(), 'grupo': nombre})
+            self._uow.grupos.update(updated)
+            for tres in self._uow.tres_arr.list_by_grupo_id(grupo_id):
+                nuevo_tres = TresArrReclamo.model_validate(
+                    {**tres.model_dump(), 'grupo': nombre}
+                )
+                self._uow.tres_arr.update(nuevo_tres)
+            self._uow.commit()
+            return updated

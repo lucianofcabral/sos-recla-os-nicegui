@@ -132,6 +132,16 @@ class SqlModelTresArrRepository:
             return None
         return row.to_entity()
 
+    def list_by_grupo_id(self, grupo_id: int) -> list[TresArrReclamo]:
+        statement = (
+            select(TresArrRow)
+            .where(TresArrRow.grupo_id == grupo_id)
+            .options(selectinload(TresArrRow.reclamo))
+            .order_by(TresArrRow.id)
+        )
+        rows = self._session.exec(statement).all()
+        return [row.to_entity() for row in rows]
+
     def save(self, tres_arr: TresArrReclamo) -> TresArrReclamo:
         row = TresArrRow.from_entity(tres_arr)
         self._session.add(row)
@@ -155,6 +165,12 @@ class SqlModelGrupoRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def get(self, grupo_id: int) -> Grupo:
+        row = self._session.get(GrupoRow, grupo_id)
+        if row is None:
+            raise EntityNotFoundError(f'grupo {grupo_id} not found')
+        return row.to_entity()
+
     def get_by_nombre(self, grupo: str) -> Grupo | None:
         statement = select(GrupoRow).where(GrupoRow.grupo == grupo)
         row = self._session.exec(statement).first()
@@ -171,6 +187,16 @@ class SqlModelGrupoRepository:
             self._session.flush()
         except IntegrityError as exc:
             raise DuplicateEntityError(f'grupo {grupo.grupo!r} already exists') from exc
+        return row.to_entity()
+
+    def update(self, grupo: Grupo) -> Grupo:
+        if grupo.id is None:
+            raise EntityNotFoundError('grupo None not found')
+        existing = self._session.get(GrupoRow, grupo.id)
+        if existing is None:
+            raise EntityNotFoundError(f'grupo {grupo.id} not found')
+        row = self._session.merge(GrupoRow.from_entity(grupo))
+        self._session.flush()
         return row.to_entity()
 
     def list(self) -> list[Grupo]:

@@ -114,6 +114,9 @@ class FakeTresArrReclamoRepository(_InMemoryRepository[TresArrReclamo]):
                 return tres_arr
         return None
 
+    def list_by_grupo_id(self, grupo_id: int) -> list[TresArrReclamo]:
+        return [t for t in self._store.values() if t.grupo_id == grupo_id]
+
     def save(self, tres_arr: TresArrReclamo) -> TresArrReclamo:
         return self._save(tres_arr)
 
@@ -127,6 +130,12 @@ class FakeTresArrReclamoRepository(_InMemoryRepository[TresArrReclamo]):
 class FakeGrupoRepository(_InMemoryRepository[Grupo]):
     """In-memory implementation of GrupoRepositoryPort."""
 
+    def get(self, grupo_id: int) -> Grupo:
+        try:
+            return self._store[grupo_id]
+        except KeyError as exc:
+            raise EntityNotFoundError(f'grupo {grupo_id} not found') from exc
+
     def get_by_nombre(self, grupo: str) -> Grupo | None:
         for existing in self._store.values():
             if existing.grupo == grupo:
@@ -137,6 +146,12 @@ class FakeGrupoRepository(_InMemoryRepository[Grupo]):
         if self.get_by_nombre(grupo.grupo) is not None:
             raise DuplicateEntityError(f'grupo {grupo.grupo!r} already exists')
         return self._save(grupo)
+
+    def update(self, grupo: Grupo) -> Grupo:
+        if grupo.id is None or grupo.id not in self._store:
+            raise EntityNotFoundError(f'grupo {grupo.id} not found')
+        self._store[grupo.id] = grupo
+        return grupo
 
     def list(self) -> list[Grupo]:
         return sorted(self._store.values(), key=lambda g: g.grupo)

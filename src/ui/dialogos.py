@@ -19,6 +19,7 @@ from src.application.use_cases.lote import LoteTresArrNuevo
 from src.application.use_cases.pago import PagoNuevo
 from src.application.use_cases.periodo import PeriodoNuevo
 from src.application.use_cases.reclamo import (
+    ActualizarGrupo,
     OtrosReclamoActualizar,
     OtrosReclamoConPagosNuevo,
     OtrosReclamoNuevo,
@@ -41,6 +42,7 @@ from src.domain.dto.create import (
     TresArrReclamoCreate,
 )
 from src.domain.dto.edit import OtrosReclamoEdit, ReclamoSosEdit, TresArrReclamoEdit
+from src.domain.dto.read import GrupoReclamoItem
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import Pago, User
 from src.ui.deps import uow_per_request
@@ -456,7 +458,9 @@ def open_editar_reclamo(
                 else None
             )
             grupo = (
-                ui.input('Grupo', value=current.get('grupo') or '')
+                ui.input('Grupo', value=current.get('grupo') or '').props(
+                    'outlined readonly'
+                )
                 if tipo == 'tresa'
                 else None
             )
@@ -537,6 +541,206 @@ def open_editar_reclamo(
             ui.button('Cancelar', on_click=dialog.close).props('flat')
             ui.button('Guardar', on_click=guardar).props('unelevated color=primary')
     dialog.open()
+
+
+def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
+    """Open the group dialog: rename group + gestiones listing with pagos."""
+    with uow_per_request() as uow:
+        grupo = uow.grupos.get(grupo_id)
+        items: list[GrupoReclamoItem] = uow.list_grupo_detalle(grupo_id)
+    selected_id: int | None = None
+
+    with (
+        ui.dialog() as dialog,
+        ui.card().classes('w-[44rem] max-w-full'),
+        ui.column().classes('gap-2 w-full'),
+    ):
+
+        def _render_gestiones() -> None:
+            gestiones_container.clear()
+            if not items:
+                with gestiones_container:
+                    ui.label('El grupo no tiene gestiones').classes('text-caption')
+                return
+            with gestiones_container:
+                table = ui.table(
+                    columns=[
+                        {'name': 'dominio', 'label': 'Dominio', 'field': 'dominio'},
+                        {'name': 'cliente', 'label': 'Cliente', 'field': 'cliente'},
+                        {'name': 'poliza', 'label': 'Póliza', 'field': 'poliza'},
+                        {
+                            'name': 'importe',
+                            'label': 'Importe',
+                            'field': 'importe',
+                            'align': 'right',
+                        },
+                        {
+                            'name': 'cant_pagos',
+                            'label': 'Cant. Pagos',
+                            'field': 'cant_pagos',
+                            'align': 'center',
+                        },
+                        {
+                            'name': 'editar',
+                            'label': '',
+                            'field': 'editar',
+                            'align': 'center',
+                        },
+                    ],
+                    rows=[
+                        {
+                            'reclamo_id': item.reclamo_id,
+                            'dominio': item.dominio or '',
+                            'cliente': item.cliente or '',
+                            'poliza': item.poliza or '',
+                            'importe': format_money(item.importe_reclamado),
+                            'cant_pagos': item.cant_pagos,
+                        }
+                        for item in items
+                    ],
+                    row_key='reclamo_id',
+                ).classes('w-full')
+                table.on(
+                    'row-click',
+                    _on_row_clicked,
+                    js_handler='(evt, row, index) => emit(row)',
+                )
+                with table.add_slot('body-cell-editar'), table.cell('editar'):
+                    ui.button(icon='edit').props('flat dense').on(
+                        'click.stop',
+                        js_handler='() => emit(props.row)',
+                        handler=_editar_gestion,
+                    )
+
+        def _on_row_clicked(e: events.GenericEventArguments) -> None:
+            nonlocal selected_id
+            args = cast(dict[str, Any], e.args)
+            reclamo_id = int(args.get('reclamo_id', -1))
+            if reclamo_id < 0:
+                return
+            selected_id = reclamo_id
+            _render_pagos()
+
+        def _editar_gestion(e: events.GenericEventArguments) -> None:
+            args = cast(dict[str, Any], e.args)
+            reclamo_id = int(args.get('reclamo_id', -1))
+            if reclamo_id < 0:
+                return
+            open_editar_reclamo('tresa', reclamo_id, _reload)
+
+        def _render_pagos() -> None:
+            pagos_container.clear()
+            item = next((it for it in items if it.reclamo_id == selected_id), None)
+            if item is None:
+                with pagos_container:
+                    ui.label('Seleccioná una gestión para ver sus pagos').classes(
+                        'text-caption text-grey-7'
+                    )
+                return
+            with pagos_container:
+                ui.label(f'Pagos de la gestión {item.cliente or "—"}').classes(
+                    'text-subtitle2'
+                )
+                if not item.pagos:
+                    ui.label('Sin pagos registrados').classes('text-caption')
+                    return
+                ui.table(
+                    columns=[
+                        {'name': 'fecha', 'label': 'Fecha', 'field': 'fecha'},
+                        {'name': 'forma', 'label': 'Forma', 'field': 'forma'},
+                        {'name': 'pagador', 'label': 'Pagador', 'field': 'pagador'},
+                        {
+                            'name': 'destinatario',
+                            'label': 'Destinatario',
+                            'field': 'destinatario',
+                        },
+                        {
+                            'name': 'monto',
+                            'label': 'Importe',
+                            'field': 'monto',
+                            'align': 'right',
+                        },
+                    ],
+                    rows=[
+                        {
+                            'pago_id': pago.pago_id,
+                            'fecha': format_date(pago.fecha_pago),
+                            'forma': (
+                                FORMA_PAGO_LABELS.get(pago.forma_pago, '')
+                                if pago.forma_pago is not None
+                                else ''
+                            ),
+                            'pagador': (
+                                AGENTE_LABELS.get(pago.pagador, '')
+                                if pago.pagador is not None
+                                else ''
+                            ),
+                            'destinatario': (
+                                AGENTE_LABELS.get(pago.destinatario, '')
+                                if pago.destinatario is not None
+                                else ''
+                            ),
+                            'monto': format_money(pago.monto),
+                        }
+                        for pago in item.pagos
+                    ],
+                    row_key='pago_id',
+                ).classes('w-full')
+
+        def _reload() -> None:
+            nonlocal items
+            with uow_per_request() as uow:
+                grupo_actual = uow.grupos.get(grupo_id)
+                items = uow.list_grupo_detalle(grupo_id)
+            header.set_text(f'Grupo 3 Arroyos {grupo_actual.grupo}')
+            nombre.set_value(grupo_actual.grupo)
+            error.set_text('')
+            _render_gestiones()
+            _render_pagos()
+            refresh()
+
+        def _renombrar() -> None:
+            error.set_text('')
+            try:
+                with uow_per_request() as uow:
+                    ActualizarGrupo(uow)(grupo_id, nombre.value)
+            except DomainError as exc:
+                error.set_text(str(exc))
+                return
+            ui.notify('Grupo renombrado', type='positive')
+            _reload()
+
+        header = ui.label(f'Grupo 3 Arroyos {grupo.grupo}').classes('text-h6')
+        with ui.row().classes('gap-4 text-caption text-grey-7 flex-wrap'):
+            ui.label(f'Fecha creación: {format_date(grupo.fecha_creacion)}')
+            ui.label(f'Usuario creación: {grupo.usuario_creacion or "—"}')
+
+        error = ui.label('').classes('text-negative')
+        with ui.row().classes('gap-2 items-center w-full'):
+            nombre = ui.input('Nombre del grupo', value=grupo.grupo).props('outlined')
+            ui.button('Renombrar', on_click=_renombrar).props(
+                'unelevated color=primary'
+            )
+
+        gestiones_container = ui.column().classes('gap-1 w-full')
+        pagos_container = ui.column().classes('gap-1 w-full')
+
+        with ui.row().classes('justify-between w-full'):
+            ui.button('Cerrar', on_click=dialog.close).props('flat')
+
+        _render_gestiones()
+        _render_pagos()
+    dialog.open()
+
+
+def open_editar_tresa(reclamo_id: int, refresh: Callable[[], None]) -> None:
+    """Open the group dialog of the gestión, or the individual edit dialog."""
+    with uow_per_request() as uow:
+        tres = uow.tres_arr.get_by_reclamo_id(reclamo_id)
+    if tres is None or tres.grupo_id is None:
+        open_editar_reclamo('tresa', reclamo_id, refresh)
+    else:
+        open_grupo_tres_arr(tres.grupo_id, refresh)
 
 
 def open_nuevo_pago(refresh: Callable[[], None]) -> None:

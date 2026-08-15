@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Self
 
 from sqlalchemy import func
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from src.adapters.sqlmodel.models import (
@@ -32,6 +33,7 @@ from src.adapters.sqlmodel.repositories import (
 from src.domain.domain_enums import FormaPagoEnum
 from src.domain.dto.read import (
     CicloCard,
+    GrupoReclamoItem,
     PagoListItem,
     ReclamoHomeFilter,
     ReclamoHomeItem,
@@ -164,6 +166,61 @@ class SqlModelUnitOfWork:
                         if pago.reclamo_id is not None
                         else None
                     ),
+                )
+            )
+        return items
+
+    def list_grupo_detalle(self, grupo_id: int) -> list[GrupoReclamoItem]:
+        """Gestions of a Tres Arroyos group with pago detail (no N+1)."""
+        tres_arr_rows = self._session.exec(
+            select(TresArrRow)
+            .where(TresArrRow.grupo_id == grupo_id)
+            .options(selectinload(TresArrRow.reclamo))
+            .order_by(TresArrRow.id)
+        ).all()
+        reclamo_ids = [
+            row.reclamo_id for row in tres_arr_rows if row.reclamo_id is not None
+        ]
+        pagos_por_reclamo: dict[int, list[PagoRow]] = {}
+        if reclamo_ids:
+            for pago in self._session.exec(
+                select(PagoRow)
+                .where(PagoRow.reclamo_id.in_(reclamo_ids))
+                .order_by(PagoRow.id)
+            ).all():
+                if pago.reclamo_id is not None:
+                    pagos_por_reclamo.setdefault(pago.reclamo_id, []).append(pago)
+        items: list[GrupoReclamoItem] = []
+        for row in tres_arr_rows:
+            assert row.reclamo_id is not None
+            reclamo = row.to_entity().reclamo
+            pagos = pagos_por_reclamo.get(row.reclamo_id, [])
+            items.append(
+                GrupoReclamoItem(
+                    reclamo_id=row.reclamo_id,
+                    cliente=reclamo.cliente if reclamo is not None else None,
+                    poliza=reclamo.poliza if reclamo is not None else None,
+                    dominio=reclamo.dominio if reclamo is not None else None,
+                    importe_reclamado=(
+                        reclamo.importe_reclamado if reclamo is not None else None
+                    ),
+                    cant_pagos=len(pagos),
+                    pagos=[
+                        PagoListItem(
+                            pago_id=pago.id,
+                            fecha_pago=pago.fecha_pago,
+                            forma_pago=pago.forma_pago,
+                            pagador=pago.pagador,
+                            destinatario=pago.destinatario,
+                            monto=pago.monto,
+                            dominio=reclamo.dominio if reclamo is not None else None,
+                            poliza=reclamo.poliza if reclamo is not None else None,
+                            cliente=reclamo.cliente if reclamo is not None else None,
+                            nro_gestion=None,
+                        )
+                        for pago in pagos
+                        if pago.id is not None
+                    ],
                 )
             )
         return items

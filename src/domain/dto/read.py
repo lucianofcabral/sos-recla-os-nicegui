@@ -98,6 +98,18 @@ class PagoListItem(BaseModel):
     nro_gestion: int | None = None
 
 
+class GrupoReclamoItem(BaseModel):
+    """A 3 Arroyos gestión inside a group, with its pago count and detail."""
+
+    reclamo_id: int
+    cliente: str | None
+    poliza: str | None
+    dominio: str | None
+    importe_reclamado: float | None
+    cant_pagos: int
+    pagos: list[PagoListItem]
+
+
 class CicloCard(BaseModel):
     """Summary card for a billing cycle."""
 

@@ -19,6 +19,7 @@ from src.ui.dialogos import (
     _text,
     open_alta_reclamo,
     open_editar_reclamo,
+    open_editar_tresa,
     open_importar_sos,
     open_nuevo_lote_tres_arr,
 )
@@ -275,7 +276,10 @@ def home(user: User) -> None:
             reclamo_id = int(args['reclamo_id'])
             tipo = args.get('tipo', '')
             if tipo:
-                open_editar_reclamo(tipo, reclamo_id, refresh_table)
+                if tipo == 'tresa':
+                    open_editar_tresa(reclamo_id, refresh_table)
+                else:
+                    open_editar_reclamo(tipo, reclamo_id, refresh_table)
 
         with table.add_slot('body-cell-has_pagos'), table.cell('has_pagos'):
             ui.badge().props("""

@@ -58,6 +58,8 @@ class TresArrReclamoRepositoryPort(Protocol):
 
     def get_by_reclamo_id(self, reclamo_id: int) -> TresArrReclamo | None: ...
 
+    def list_by_grupo_id(self, grupo_id: int) -> list[TresArrReclamo]: ...
+
     def save(self, tres_arr: TresArrReclamo) -> TresArrReclamo: ...
 
     def update(self, tres_arr: TresArrReclamo) -> TresArrReclamo: ...
@@ -67,11 +69,17 @@ class TresArrReclamoRepositoryPort(Protocol):
 class GrupoRepositoryPort(Protocol):
     """Puerto del repositorio de grupos de reclamos de Tres Arroyos."""
 
+    def get(self, grupo_id: int) -> Grupo:
+        """Obtiene un grupo por id; lanza EntityNotFoundError si no existe."""
+        raise EntityNotFoundError
+
     def get_by_nombre(self, grupo: str) -> Grupo | None: ...
 
     def save(self, grupo: Grupo) -> Grupo:
         """Guarda un grupo; lanza DuplicateEntityError si el nombre ya existe."""
         raise DuplicateEntityError
+
+    def update(self, grupo: Grupo) -> Grupo: ...
 
     def list(self) -> list[Grupo]: ...
 
