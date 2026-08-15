@@ -425,7 +425,6 @@ def open_editar_reclamo(
     tipo: str, reclamo_id: int, refresh: Callable[[], None]
 ) -> None:
     current = _valores_actuales(tipo, reclamo_id)
-    pagos = _pagos_del_reclamo(reclamo_id)
     with (
         ui.dialog() as dialog,
         ui.card().classes('w-[38rem] max-w-full'),
@@ -466,52 +465,68 @@ def open_editar_reclamo(
             )
         error = ui.label('').classes('text-negative')
 
-        ui.label('Pagos del reclamo').classes('text-subtitle2')
-        if pagos:
-            ui.table(
-                columns=[
-                    {'name': 'fecha', 'label': 'Fecha', 'field': 'fecha'},
-                    {'name': 'forma', 'label': 'Forma', 'field': 'forma'},
-                    {'name': 'pagador', 'label': 'Pagador', 'field': 'pagador'},
-                    {
-                        'name': 'destinatario',
-                        'label': 'Destinatario',
-                        'field': 'destinatario',
-                    },
-                    {
-                        'name': 'monto',
-                        'label': 'Importe',
-                        'field': 'monto',
-                        'align': 'right',
-                    },
-                ],
-                rows=[
-                    {
-                        'id': pago.id,
-                        'fecha': format_date(pago.fecha_pago),
-                        'forma': (
-                            FORMA_PAGO_LABELS.get(pago.forma_pago, '')
-                            if pago.forma_pago is not None
-                            else ''
-                        ),
-                        'pagador': (
-                            AGENTE_LABELS.get(pago.pagador, '')
-                            if pago.pagador is not None
-                            else ''
-                        ),
-                        'destinatario': (
-                            AGENTE_LABELS.get(pago.destinatario, '')
-                            if pago.destinatario is not None
-                            else ''
-                        ),
-                        'monto': format_money(pago.monto),
-                    }
-                    for pago in pagos
-                ],
-                row_key='id',
-            ).classes('w-full')
-        else:
-            ui.label('Sin pagos registrados').classes('text-caption')
+        with ui.row().classes('items-center justify-between w-full'):
+            ui.label('Pagos del reclamo').classes('text-subtitle2')
+            ui.button(
+                'Nuevo pago',
+                icon='playlist_add',
+                on_click=lambda: _dialogo_nuevo_pago(reclamo_id, _render_pagos),
+            ).props('unelevated color=primary dense')
+
+        pagos_container = ui.column().classes('gap-1 w-full')
+
+        def _render_pagos() -> None:
+            pagos_container.clear()
+            pagos = _pagos_del_reclamo(reclamo_id)
+            if not pagos:
+                with pagos_container:
+                    ui.label('Sin pagos registrados').classes('text-caption')
+                return
+            with pagos_container:
+                ui.table(
+                    columns=[
+                        {'name': 'fecha', 'label': 'Fecha', 'field': 'fecha'},
+                        {'name': 'forma', 'label': 'Forma', 'field': 'forma'},
+                        {'name': 'pagador', 'label': 'Pagador', 'field': 'pagador'},
+                        {
+                            'name': 'destinatario',
+                            'label': 'Destinatario',
+                            'field': 'destinatario',
+                        },
+                        {
+                            'name': 'monto',
+                            'label': 'Importe',
+                            'field': 'monto',
+                            'align': 'right',
+                        },
+                    ],
+                    rows=[
+                        {
+                            'id': pago.id,
+                            'fecha': format_date(pago.fecha_pago),
+                            'forma': (
+                                FORMA_PAGO_LABELS.get(pago.forma_pago, '')
+                                if pago.forma_pago is not None
+                                else ''
+                            ),
+                            'pagador': (
+                                AGENTE_LABELS.get(pago.pagador, '')
+                                if pago.pagador is not None
+                                else ''
+                            ),
+                            'destinatario': (
+                                AGENTE_LABELS.get(pago.destinatario, '')
+                                if pago.destinatario is not None
+                                else ''
+                            ),
+                            'monto': format_money(pago.monto),
+                        }
+                        for pago in pagos
+                    ],
+                    row_key='id',
+                ).classes('w-full')
+
+        _render_pagos()
 
         def guardar() -> None:
             error.set_text('')
@@ -743,20 +758,32 @@ def open_editar_tresa(reclamo_id: int, refresh: Callable[[], None]) -> None:
         open_grupo_tres_arr(tres.grupo_id, refresh)
 
 
-def open_nuevo_pago(refresh: Callable[[], None]) -> None:
-    reclamos = _load_reclamos()
-    if not reclamos:
-        ui.notify('No hay reclamos activos para registrar un pago', type='warning')
-        return
+def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) -> None:
+    """Open the pago form; a fixed reclamo_id skips the reclamo selector."""
+    reclamos: dict[int, str] = {}
+    if reclamo_id is None:
+        reclamos = _load_reclamos()
+        if not reclamos:
+            ui.notify('No hay reclamos activos para registrar un pago', type='warning')
+            return
     with (
         ui.dialog() as dialog,
         ui.card().classes('w-96 max-w-full'),
         ui.column().classes('gap-2 w-full'),
     ):
         ui.label('Nuevo Pago').classes('text-h6')
-        reclamo = ui.select(
-            options=reclamos, label='Reclamo (Dominio · Póliza · Cliente · Tipo)'
-        )
+        if reclamo_id is None:
+            reclamo = ui.select(
+                options=reclamos, label='Reclamo (Dominio · Póliza · Cliente · Tipo)'
+            )
+        else:
+            with uow_per_request() as uow:
+                reclamo_fijo = uow.reclamos.get(reclamo_id)
+            ui.label(
+                f'Reclamo: {reclamo_fijo.dominio or ""} · '
+                f'{reclamo_fijo.poliza or ""} · {reclamo_fijo.cliente or ""}'
+            ).classes('text-caption')
+            reclamo = None
         fecha = ui.date(value=date.today())
         forma = ui.select(options=FORMA_PAGO_LABELS, label='Forma de Pago')
         monto = ui.number('Importe', format='%.2f', value=0).props('outlined')
@@ -778,12 +805,13 @@ def open_nuevo_pago(refresh: Callable[[], None]) -> None:
 
         def guardar() -> None:
             error.set_text('')
-            if reclamo.value is None or forma.value is None:
+            target_id = reclamo.value if reclamo is not None else reclamo_id
+            if target_id is None or forma.value is None:
                 error.set_text('Reclamo y Forma de Pago son obligatorios')
                 return
             es_nc = forma.value == FormaPagoEnum.NOTA_DE_CREDITO
             data = PagoCreate(
-                reclamo_id=reclamo.value,
+                reclamo_id=target_id,
                 fecha_pago=fecha.value,
                 forma_pago=forma.value,
                 monto=float(monto.value),
@@ -800,12 +828,16 @@ def open_nuevo_pago(refresh: Callable[[], None]) -> None:
                 error.set_text(_validation_text(exc))
                 return
             dialog.close()
-            refresh()
+            on_exito()
 
         with ui.row().classes('justify-between w-full'):
             ui.button('Cancelar', on_click=dialog.close).props('flat')
             ui.button('Guardar', on_click=guardar).props('unelevated color=primary')
     dialog.open()
+
+
+def open_nuevo_pago(refresh: Callable[[], None]) -> None:
+    _dialogo_nuevo_pago(None, refresh)
 
 
 def open_nuevo_lote_tres_arr(
