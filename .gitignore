@@ -1,0 +1,8 @@
+.venv/
+.atl/
+.nicegui/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.py[cod]
+*.env
