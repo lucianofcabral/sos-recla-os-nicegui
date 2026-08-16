@@ -12,6 +12,8 @@ def test_ui_and_scripts_modules_import() -> None:
         'src.ui.deps',
         'src.ui.layout',
         'src.ui.dialogos',
+        'src.ui.labels',
+        'src.ui.widgets',
         'src.ui.pages.login',
         'src.ui.pages.home',
         'src.ui.pages.pagos',
