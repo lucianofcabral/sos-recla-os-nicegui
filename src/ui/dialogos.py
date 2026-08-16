@@ -46,38 +46,14 @@ from src.domain.dto.read import GrupoReclamoItem
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import Pago, User
 from src.ui.deps import uow_per_request
-
-TIPO_LABELS: dict[TipoReclamoEnum, str] = {
-    TipoReclamoEnum.SOS: 'SOS',
-    TipoReclamoEnum.TRESA: '3 Arroyos',
-    TipoReclamoEnum.OTROS: 'Gestión',
-}
-
-TIPO_ENUM: dict[str, TipoReclamoEnum] = {
-    'sos': TipoReclamoEnum.SOS,
-    'tresa': TipoReclamoEnum.TRESA,
-    'especial': TipoReclamoEnum.OTROS,
-}
-
-FORMA_PAGO_LABELS: dict[FormaPagoEnum, str] = {
-    FormaPagoEnum.TRANSFERENCIA: 'Transferencia',
-    FormaPagoEnum.NOTA_DE_CREDITO: 'Nota de Crédito',
-    FormaPagoEnum.NC_POLIZA: 'NC Póliza',
-    FormaPagoEnum.EFECTIVO: 'Efectivo',
-    FormaPagoEnum.CHEQUE: 'Cheque',
-    FormaPagoEnum.CUENTA_CORRIENTE: 'Cuenta Corriente',
-}
-
-AGENTE_LABELS: dict[AgenteEnum, str] = {agente: agente.value for agente in AgenteEnum}
-
-MAX_ERRORS_SHOWN = 50
-
-
-def _text(value: object) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
+from src.ui.labels import AGENTE_LABELS, FORMA_PAGO_LABELS, TIPO_ENUM, TIPO_LABELS
+from src.ui.widgets import (
+    MAX_ERRORS_SHOWN,
+    _text,
+    make_remove_handler,
+    pagos_table,
+    row_action_button,
+)
 
 
 def _validation_text(exc: ValidationError) -> str:
@@ -254,34 +230,8 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
                         ui.label('Sin pagos cargados').classes('text-caption')
                     return
                 with pagos_container:
-                    table = ui.table(
-                        columns=[
-                            {'name': 'fecha', 'label': 'Fecha', 'field': 'fecha'},
-                            {'name': 'forma', 'label': 'Forma', 'field': 'forma'},
-                            {
-                                'name': 'pagador',
-                                'label': 'Pagador',
-                                'field': 'pagador',
-                            },
-                            {
-                                'name': 'destinatario',
-                                'label': 'Destinatario',
-                                'field': 'destinatario',
-                            },
-                            {
-                                'name': 'monto',
-                                'label': 'Importe',
-                                'field': 'monto',
-                                'align': 'right',
-                            },
-                            {
-                                'name': 'quitar',
-                                'label': '',
-                                'field': 'quitar',
-                                'align': 'center',
-                            },
-                        ],
-                        rows=[
+                    pagos_table(
+                        [
                             {
                                 'idx': idx,
                                 'fecha': format_date(p['fecha']),
@@ -295,20 +245,9 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
                             for idx, p in enumerate(pagos)
                         ],
                         row_key='idx',
-                    ).classes('w-full')
-                    with table.add_slot('body-cell-quitar'), table.cell('quitar'):
-                        ui.button(icon='delete').props('flat dense').on(
-                            'click',
-                            js_handler='() => emit(props.row)',
-                            handler=_on_quitar_pago,
-                        )
-
-            def _on_quitar_pago(e: events.GenericEventArguments) -> None:
-                args = cast(dict[str, Any], e.args)
-                idx = int(args.get('idx', -1))
-                if 0 <= idx < len(pagos):
-                    pagos.pop(idx)
-                _render_pagos()
+                        actions='quitar',
+                        on_action=make_remove_handler(pagos, _render_pagos),
+                    )
 
             def _agregar_pago() -> None:
                 error.set_text('')
@@ -483,24 +422,8 @@ def open_editar_reclamo(
                     ui.label('Sin pagos registrados').classes('text-caption')
                 return
             with pagos_container:
-                ui.table(
-                    columns=[
-                        {'name': 'fecha', 'label': 'Fecha', 'field': 'fecha'},
-                        {'name': 'forma', 'label': 'Forma', 'field': 'forma'},
-                        {'name': 'pagador', 'label': 'Pagador', 'field': 'pagador'},
-                        {
-                            'name': 'destinatario',
-                            'label': 'Destinatario',
-                            'field': 'destinatario',
-                        },
-                        {
-                            'name': 'monto',
-                            'label': 'Importe',
-                            'field': 'monto',
-                            'align': 'right',
-                        },
-                    ],
-                    rows=[
+                pagos_table(
+                    [
                         {
                             'id': pago.id,
                             'fecha': format_date(pago.fecha_pago),
@@ -524,7 +447,7 @@ def open_editar_reclamo(
                         for pago in pagos
                     ],
                     row_key='id',
-                ).classes('w-full')
+                )
 
         _render_pagos()
 
@@ -620,12 +543,7 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
                     _on_row_clicked,
                     js_handler='(evt, row, index) => emit(row)',
                 )
-                with table.add_slot('body-cell-editar'), table.cell('editar'):
-                    ui.button(icon='edit').props('flat dense').on(
-                        'click.stop',
-                        js_handler='() => emit(props.row)',
-                        handler=_editar_gestion,
-                    )
+                row_action_button(table, 'editar', 'edit', _editar_gestion, event='click.stop')
 
         def _on_row_clicked(e: events.GenericEventArguments) -> None:
             nonlocal selected_id
@@ -659,24 +577,8 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
                 if not item.pagos:
                     ui.label('Sin pagos registrados').classes('text-caption')
                     return
-                ui.table(
-                    columns=[
-                        {'name': 'fecha', 'label': 'Fecha', 'field': 'fecha'},
-                        {'name': 'forma', 'label': 'Forma', 'field': 'forma'},
-                        {'name': 'pagador', 'label': 'Pagador', 'field': 'pagador'},
-                        {
-                            'name': 'destinatario',
-                            'label': 'Destinatario',
-                            'field': 'destinatario',
-                        },
-                        {
-                            'name': 'monto',
-                            'label': 'Importe',
-                            'field': 'monto',
-                            'align': 'right',
-                        },
-                    ],
-                    rows=[
+                pagos_table(
+                    [
                         {
                             'pago_id': pago.pago_id,
                             'fecha': format_date(pago.fecha_pago),
@@ -698,9 +600,8 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
                             'monto': format_money(pago.monto),
                         }
                         for pago in item.pagos
-                    ],
-                    row_key='pago_id',
-                ).classes('w-full')
+                    ]
+                )
 
         def _reload() -> None:
             nonlocal items
@@ -892,19 +793,9 @@ def open_nuevo_lote_tres_arr(
                 ],
                 row_key='idx',
             ).classes('w-full')
-            with table.add_slot('body-cell-quitar'), table.cell('quitar'):
-                ui.button(icon='delete').props('flat dense').on(
-                    'click',
-                    js_handler='() => emit(props.row)',
-                    handler=_on_quitar,
+            row_action_button(
+                    table, 'quitar', 'delete', make_remove_handler(gestiones, _render_pendientes)
                 )
-
-    def _on_quitar(e: events.GenericEventArguments) -> None:
-        args = cast(dict[str, Any], e.args)
-        idx = int(args.get('idx', -1))
-        if 0 <= idx < len(gestiones):
-            gestiones.pop(idx)
-        _render_pendientes()
 
     def _agregar_gestion() -> None:
         error.set_text('')

@@ -10,35 +10,19 @@ from nicegui import events, ui
 from src.application.format import format_date, format_money
 from src.application.queries import list_grupos, list_home
 from src.application.use_cases.reclamo import ReclamoAlternarEstado
-from src.domain.domain_enums import TipoReclamoEnum
 from src.domain.dto.read import ReclamoHomeFilter, ReclamoHomeItem
 from src.domain.models.entities import User
 from src.ui.deps import uow_per_request
 from src.ui.dialogos import (
-    TIPO_LABELS,
-    _text,
     open_alta_reclamo,
     open_editar_reclamo,
     open_editar_tresa,
     open_importar_sos,
     open_nuevo_lote_tres_arr,
 )
+from src.ui.labels import TIPO_FILTRO_OPTIONS, TIPO_KEY, TIPO_LABELS
 from src.ui.layout import page
-
-TIPO_ENUM: dict[str, TipoReclamoEnum] = {
-    'sos': TipoReclamoEnum.SOS,
-    'tresa': TipoReclamoEnum.TRESA,
-    'especial': TipoReclamoEnum.OTROS,
-}
-
-TIPO_KEY: dict[TipoReclamoEnum, str] = {enum: key for key, enum in TIPO_ENUM.items()}
-
-TIPO_FILTRO_OPTIONS: dict[TipoReclamoEnum | None, str] = {
-    None: 'Todos',
-    TipoReclamoEnum.SOS: 'SOS',
-    TipoReclamoEnum.TRESA: '3 Arroyos',
-    TipoReclamoEnum.OTROS: 'Gestión',
-}
+from src.ui.widgets import _text, row_action_button
 
 COLUMNS: list[dict] = [
     {'name': 'dominio', 'label': 'Dominio', 'field': 'dominio', 'sortable': True},
@@ -291,19 +275,16 @@ def home(user: User) -> None:
                     :color="props.value ? 'green' : 'grey-7'"
                     :label="props.value ? 'Sí' : 'No'"
                 """)
-        with table.add_slot('body-cell-editar'), table.cell('editar'):
-            ui.button(icon='edit').props('flat dense').on(
-                'click',
-                js_handler='() => emit(props.row)',
-                handler=on_edit,
-            )
-        with table.add_slot('body-cell-activar'), table.cell('activar'):
-            ui.button().props("""
+        row_action_button(table, 'editar', 'edit', on_edit)
+        row_action_button(
+            table,
+            'activar',
+            None,
+            on_toggle,
+            props="""
                     flat dense
                     :label="props.row.active ? 'Inactivar' : 'Activar'"
                     :color="props.row.active ? 'orange' : 'green'"
-                """).on(
-                'click',
-                js_handler='() => emit(props.row.reclamo_id)',
-                handler=on_toggle,
-            )
+                """,
+            payload='props.row.reclamo_id',
+        )

@@ -15,8 +15,10 @@ from src.domain.dto.read import PagoListItem
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import User
 from src.ui.deps import uow_per_request
-from src.ui.dialogos import FORMA_PAGO_LABELS, open_nuevo_pago
+from src.ui.dialogos import open_nuevo_pago
+from src.ui.labels import FORMA_PAGO_LABELS
 from src.ui.layout import page
+from src.ui.widgets import pagos_table
 
 COLUMNS: list[dict] = [
     {'name': 'fecha_pago', 'label': 'Fecha Ingresado', 'field': 'fecha_pago'},
@@ -92,8 +94,6 @@ def pagos(user: User) -> None:
                 on_click=lambda: open_nuevo_pago(refresh_table),
             )
 
-        table = ui.table(columns=COLUMNS, rows=_load_rows(), row_key='pago_id')
-
         def refresh_table() -> None:
             table.update_rows(_load_rows())
 
@@ -112,9 +112,11 @@ def pagos(user: User) -> None:
                 return
             refresh_table()
 
-        with table.add_slot('body-cell-eliminar'), table.cell('eliminar'):
-            ui.button(icon='delete').props('flat dense color=negative').on(
-                'click',
-                js_handler='() => emit(props.row)',
-                handler=on_delete,
-            )
+        table = pagos_table(
+            _load_rows(),
+            columns=COLUMNS,
+            actions='eliminar',
+            on_action=on_delete,
+            action_props='flat dense color=negative',
+            classes='',
+        )
