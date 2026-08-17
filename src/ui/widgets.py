@@ -51,12 +51,13 @@ def pagos_table(
     row_key: str = 'pago_id',
     actions: str | None = None,
     on_action=None,
+    action_icon: str = 'delete',
     action_props: str = 'flat dense',
     classes: str = 'w-full',
 ) -> ui.table:
     """Render a pagos table with the standard 5-column set or a custom column set.
 
-    ``actions`` names the column hosting the per-row delete button; its column
+    ``actions`` names the column hosting the per-row action button; its column
     definition is appended when not already present in ``columns``.
     """
     effective = list(PAGO_COLUMNS) if columns is None else list(columns)
@@ -66,7 +67,7 @@ def pagos_table(
         )
     table = ui.table(columns=effective, rows=rows, row_key=row_key).classes(classes)
     if actions is not None and on_action is not None:
-        row_action_button(table, actions, 'delete', on_action, props=action_props)
+        row_action_button(table, actions, action_icon, on_action, props=action_props)
     return table
 
 

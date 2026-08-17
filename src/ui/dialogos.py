@@ -16,7 +16,7 @@ from src.application.import_excel_sos import (
     importar_excel_sos,
 )
 from src.application.use_cases.lote import LoteTresArrNuevo
-from src.application.use_cases.pago import PagoNuevo
+from src.application.use_cases.pago import PagoActualizar, PagoNuevo
 from src.application.use_cases.periodo import PeriodoNuevo
 from src.application.use_cases.reclamo import (
     ActualizarGrupo,
@@ -41,7 +41,12 @@ from src.domain.dto.create import (
     ReclamoSosCreate,
     TresArrReclamoCreate,
 )
-from src.domain.dto.edit import OtrosReclamoEdit, ReclamoSosEdit, TresArrReclamoEdit
+from src.domain.dto.edit import (
+    OtrosReclamoEdit,
+    PagoEdit,
+    ReclamoSosEdit,
+    TresArrReclamoEdit,
+)
 from src.domain.dto.read import GrupoReclamoItem
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import Pago, User
@@ -160,6 +165,36 @@ def _valores_actuales(tipo: str, reclamo_id: int) -> dict[str, Any]:
 def _pagos_del_reclamo(reclamo_id: int) -> list[Pago]:
     with uow_per_request() as uow:
         return uow.pagos.list(reclamo_id=reclamo_id)
+
+
+def _pago_edit_payload(
+    pago_id: int,
+    es_nc: bool,
+    monto: float,
+    fecha_pago: date | str,
+    forma_pago: FormaPagoEnum | None = None,
+    pagador: AgenteEnum | None = None,
+    destinatario: AgenteEnum | None = None,
+) -> PagoEdit:
+    """Build a PagoEdit with only the editable fields for the given pago kind.
+
+    Nota de crédito pagos keep forma/actores fixed: the payload only carries
+    id/monto/fecha_pago, so PagoActualizar never sees the immutable fields.
+    """
+    values: dict[str, Any] = {
+        'id': pago_id,
+        'monto': monto,
+        'fecha_pago': (
+            fecha_pago
+            if isinstance(fecha_pago, date)
+            else date.fromisoformat(str(fecha_pago))
+        ),
+    }
+    if not es_nc:
+        values['forma_pago'] = forma_pago
+        values['pagador'] = pagador
+        values['destinatario'] = destinatario
+    return PagoEdit(**values)
 
 
 def _load_reclamos() -> dict[int, str]:
@@ -442,7 +477,17 @@ def open_editar_reclamo(
                         for pago in pagos
                     ],
                     row_key='id',
+                    actions='editar',
+                    action_icon='edit',
+                    on_action=_editar_pago,
                 )
+
+        def _editar_pago(e: events.GenericEventArguments) -> None:
+            args = cast(dict[str, Any], e.args)
+            pago_id = int(args.get('id', -1))
+            if pago_id < 0:
+                return
+            _dialogo_editar_pago(pago_id, _render_pagos)
 
         _render_pagos()
 
@@ -707,6 +752,67 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
             try:
                 with uow_per_request() as uow:
                     PagoNuevo(uow)(data)
+            except DomainError as exc:
+                error.set_text(str(exc))
+                return
+            except ValidationError as exc:
+                error.set_text(_validation_text(exc))
+                return
+            dialog.close()
+            on_exito()
+
+        form_footer(dialog, on_save=guardar)
+    dialog.open()
+
+
+def _dialogo_editar_pago(pago_id: int, on_exito: Callable[[], None]) -> None:
+    """Open the pago edit dialog pre-filled with the current values."""
+    with uow_per_request() as uow:
+        pago = uow.pagos.get(pago_id)
+    es_nc = pago.forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
+    with modal('Editar Pago') as dialog:
+        fecha = ui.date(value=pago.fecha_pago or date.today())
+        forma = ui.select(
+            options=FORMA_PAGO_LABELS, label='Forma de Pago', value=pago.forma_pago
+        )
+        monto = ui.number('Importe', format='%.2f', value=pago.monto).props('outlined')
+        pagador = ui.select(
+            options=AGENTE_LABELS, label='Pagador', value=pago.pagador
+        ).props('outlined')
+        destinatario = ui.select(
+            options=AGENTE_LABELS, label='Destinatario', value=pago.destinatario
+        ).props('outlined')
+        nota = ui.label('Nota de crédito: SOS paga a SM').classes('text-caption')
+        nota.bind_visibility_from(
+            forma, 'value', lambda v: v == FormaPagoEnum.NOTA_DE_CREDITO
+        )
+        pagador.bind_visibility_from(
+            forma, 'value', lambda v: v != FormaPagoEnum.NOTA_DE_CREDITO
+        )
+        destinatario.bind_visibility_from(
+            forma, 'value', lambda v: v != FormaPagoEnum.NOTA_DE_CREDITO
+        )
+        if es_nc:
+            forma.set_enabled(False)
+            pagador.set_enabled(False)
+            destinatario.set_enabled(False)
+        error = error_label()
+
+        def guardar() -> None:
+            error.set_text('')
+            try:
+                with uow_per_request() as uow:
+                    PagoActualizar(uow)(
+                        _pago_edit_payload(
+                            pago_id,
+                            es_nc,
+                            float(monto.value),
+                            fecha.value,
+                            forma.value,
+                            pagador.value,
+                            destinatario.value,
+                        )
+                    )
             except DomainError as exc:
                 error.set_text(str(exc))
                 return

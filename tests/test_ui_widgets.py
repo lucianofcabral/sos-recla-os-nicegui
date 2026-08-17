@@ -159,3 +159,33 @@ def test_ui_widgets_error_label() -> None:
     assert isinstance(err, ui.label)
     assert err.text == 'No se pudo guardar'
     assert widgets.error_label().text == ''
+
+
+def test_ui_widgets_pagos_table_action() -> None:
+    """pagos_table appends the actions column and wires the row-action slot."""
+    table = widgets.pagos_table(
+        [
+            {
+                'id': 1,
+                'fecha': '01/01/2024',
+                'forma': 'Transferencia',
+                'pagador': 'SM',
+                'destinatario': 'Prestador',
+                'monto': '1.000,00',
+            }
+        ],
+        row_key='id',
+        actions='editar',
+        action_icon='edit',
+        on_action=lambda e: None,
+    )
+    columns = [col['name'] for col in table._props['columns']]
+    assert columns == ['fecha', 'forma', 'pagador', 'destinatario', 'monto', 'editar']
+    assert 'body-cell-editar' in table.slots
+
+
+def test_ui_widgets_pagos_table_no_actions() -> None:
+    """pagos_table without actions keeps the standard 5-column set."""
+    table = widgets.pagos_table([])
+    columns = [col['name'] for col in table._props['columns']]
+    assert columns == ['fecha', 'forma', 'pagador', 'destinatario', 'monto']
