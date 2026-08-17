@@ -43,6 +43,10 @@
         "bash": "ask"
       },
       "prompt": "You are a general-purpose coding assistant. You can read files, run commands, and make simple edits. Keep responses short and direct."
+    },
+    "general": {
+      "mode": "subagent",
+      "model": "ollama/qwen2.5:3b"
     }
   }
 }

@@ -2,6 +2,7 @@
 
 from src.domain.dto.read import (
     CicloCard,
+    NotaCreditoSinAsignarItem,
     PagoListFilter,
     PagoListItem,
     ReclamoHomeFilter,
@@ -28,3 +29,9 @@ def list_pagos_con_detalle(
 
 def list_ciclos(uow: QueryPort) -> list[CicloCard]:
     return uow.list_ciclos()
+
+
+def list_notas_credito_sin_asignar(
+    uow: QueryPort,
+) -> list[NotaCreditoSinAsignarItem]:
+    return uow.list_notas_credito_sin_asignar()

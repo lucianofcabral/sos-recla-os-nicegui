@@ -17,7 +17,7 @@ def test_ui_and_scripts_modules_import() -> None:
         'src.ui.pages.login',
         'src.ui.pages.home',
         'src.ui.pages.pagos',
-        'src.ui.pages.ciclos',
+        'src.ui.pages.periodos',
         'src.ui.pages.migracion',
         'scripts.bootstrap',
     ):

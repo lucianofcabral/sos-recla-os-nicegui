@@ -8,6 +8,7 @@ from src.application.queries import (
     list_ciclos,
     list_grupos,
     list_home,
+    list_notas_credito_sin_asignar,
     list_pagos_con_detalle,
 )
 from src.application.use_cases.factura import FacturaNueva
@@ -464,3 +465,80 @@ def test_list_pagos_filtro_sets_vacios_no_filtran() -> None:
         PagoListFilter(pagadores=set(), destinatarios=set(), formas=set()),
     )
     assert len(items) == 3
+
+
+def test_list_notas_credito_sin_asignar_retorna_nc_sin_periodo() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        sos = SosReclamoNuevo(uow)(
+            ReclamoSosCreate(
+                reclamo=ReclamoCreate(
+                    cliente='ACME',
+                    poliza='P-001',
+                    dominio='AB123CD',
+                    importe_reclamado=15000.0,
+                ),
+                nro_gestion=1001,
+            )
+        )
+        assert sos.reclamo_id is not None
+        PagoNuevo(uow)(
+            PagoCreate(
+                reclamo_id=sos.reclamo_id,
+                forma_pago=FormaPagoEnum.NOTA_DE_CREDITO,
+                pagador=AgenteEnum.SOS,
+                destinatario=AgenteEnum.SM,
+                monto=5000.0,
+                fecha_pago=date(2026, 1, 15),
+            )
+        )
+        periodo = PeriodoNuevo(uow)(PeriodoCreate(anio=2026, mes=1))
+        assert periodo.id is not None
+        uow.commit()
+    ncs = list_notas_credito_sin_asignar(uow)
+    assert len(ncs) == 1
+    nc = ncs[0]
+    assert nc.monto == 5000.0
+    assert nc.fecha_pago == date(2026, 1, 15)
+    assert nc.dominio == 'AB123CD'
+    assert nc.cliente == 'ACME'
+    assert nc.poliza == 'P-001'
+    assert nc.nro_gestion == 1001
+
+
+def test_list_notas_credito_sin_asignar_vacia_despues_de_asignar() -> None:
+    uow = FakeUnitOfWork()
+    with uow:
+        sos = SosReclamoNuevo(uow)(
+            ReclamoSosCreate(
+                reclamo=ReclamoCreate(
+                    cliente='ACME',
+                    poliza='P-001',
+                    dominio='AB123CD',
+                    importe_reclamado=15000.0,
+                ),
+                nro_gestion=1001,
+            )
+        )
+        assert sos.reclamo_id is not None
+        PagoNuevo(uow)(
+            PagoCreate(
+                reclamo_id=sos.reclamo_id,
+                forma_pago=FormaPagoEnum.NOTA_DE_CREDITO,
+                pagador=AgenteEnum.SOS,
+                destinatario=AgenteEnum.SM,
+                monto=5000.0,
+            )
+        )
+        periodo = PeriodoNuevo(uow)(PeriodoCreate(anio=2026, mes=1))
+        assert periodo.id is not None
+        nc = uow.credit_notes.get_by_pago_id(1)
+        assert nc is not None and nc.id is not None
+        AsignarNotaCreditoAPeriodo(uow)(nc.id, periodo.id)
+        uow.commit()
+    assert list_notas_credito_sin_asignar(uow) == []
+
+
+def test_list_notas_credito_sin_asignar_vacia_sin_ncs() -> None:
+    uow = FakeUnitOfWork()
+    assert list_notas_credito_sin_asignar(uow) == []

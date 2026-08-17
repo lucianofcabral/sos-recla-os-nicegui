@@ -399,3 +399,61 @@ def test_sql_home_orden_fecha_desc(engine) -> None:
         uow.commit()
         items = uow.list_home()
     assert [item.dominio for item in items] == ['CC300', 'BB200', 'AA100']
+
+
+def test_sql_notas_credito_sin_asignar(engine) -> None:
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        reclamo = uow.reclamos.save(
+            Reclamo(
+                cliente='ACME',
+                poliza='P-001',
+                dominio='AB123CD',
+                importe_reclamado=15000.0,
+            )
+        )
+        assert reclamo.id is not None
+        uow.reclamos_sos.save(ReclamoSos(reclamo_id=reclamo.id, nro_gestion=1001))
+        pago_nc = uow.pagos.save(
+            Pago(
+                reclamo_id=reclamo.id,
+                forma_pago=FormaPagoEnum.NOTA_DE_CREDITO,
+                pagador=AgenteEnum.SOS,
+                destinatario=AgenteEnum.SM,
+                monto=5000.0,
+                fecha_pago=date(2026, 1, 15),
+            )
+        )
+        assert pago_nc.id is not None
+        uow.credit_notes.save(CreditNote(pago_id=pago_nc.id, periodo_id=None))
+        uow.commit()
+        ncs = uow.list_notas_credito_sin_asignar()
+    assert len(ncs) == 1
+    nc = ncs[0]
+    assert nc.monto == 5000.0
+    assert nc.fecha_pago == date(2026, 1, 15)
+    assert nc.dominio == 'AB123CD'
+    assert nc.cliente == 'ACME'
+    assert nc.poliza == 'P-001'
+    assert nc.nro_gestion == 1001
+
+
+def test_sql_notas_credito_sin_asignar_vacia_con_periodo(engine) -> None:
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        periodo = uow.periodos.save(Periodo(anio=2026, mes=1))
+        assert periodo.id is not None
+        reclamo = uow.reclamos.save(Reclamo(cliente='X', poliza='P', dominio='D'))
+        assert reclamo.id is not None
+        pago_nc = uow.pagos.save(
+            Pago(
+                reclamo_id=reclamo.id,
+                forma_pago=FormaPagoEnum.NOTA_DE_CREDITO,
+                pagador=AgenteEnum.SOS,
+                destinatario=AgenteEnum.SM,
+                monto=1000.0,
+            )
+        )
+        assert pago_nc.id is not None
+        uow.credit_notes.save(CreditNote(pago_id=pago_nc.id, periodo_id=periodo.id))
+        uow.commit()
+        ncs = uow.list_notas_credito_sin_asignar()
+    assert ncs == []

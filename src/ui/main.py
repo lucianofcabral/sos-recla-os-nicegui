@@ -6,11 +6,6 @@ import os
 
 from nicegui import ui
 
-import src.ui.pages.ciclos
-import src.ui.pages.home
-import src.ui.pages.login
-import src.ui.pages.migracion
-import src.ui.pages.pagos  # noqa: F401  (registers the pagos page)
 from src.infrastructure.database import build_engine, create_schema
 
 UI_HOST = os.getenv('UI_HOST', '127.0.0.1')

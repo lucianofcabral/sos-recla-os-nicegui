@@ -163,6 +163,19 @@ class CicloCard(BaseModel):
     cerrado: bool = False
 
 
+class NotaCreditoSinAsignarItem(BaseModel):
+    """A credit note without a period assignment, for the periodos page."""
+
+    credit_note_id: int
+    pago_id: int | None = None
+    monto: float | None = None
+    fecha_pago: date | None = None
+    dominio: str | None = None
+    cliente: str | None = None
+    poliza: str | None = None
+    nro_gestion: int | None = None
+
+
 class LoteTresArrResult(BaseModel):
     """Report of a created Tres Arroyos lot, for the UI summary."""
 

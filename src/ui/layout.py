@@ -23,7 +23,7 @@ class NavItem(NamedTuple):
 NAV_ITEMS: tuple[NavItem, ...] = (
     NavItem('Inicio', '/', 'home'),
     NavItem('Pagos', '/pagos', 'payments'),
-    NavItem('Ciclos', '/ciclos', 'date_range'),
+    NavItem('Periodos', '/periodos', 'date_range'),
     NavItem('Migración', '/migracion', 'upload_file', admin_only=True),
 )
 
