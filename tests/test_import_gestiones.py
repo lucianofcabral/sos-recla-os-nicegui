@@ -475,6 +475,7 @@ def test_build_pago_y_build_periodo() -> None:
     assert periodo.anio_mes == 202304
     assert periodo.nombre_corto == '04/2023'
     assert periodo.nombre_largo is None
+    assert periodo.cerrado is True
 
 
 def test_build_factura_nro_fabricado() -> None:

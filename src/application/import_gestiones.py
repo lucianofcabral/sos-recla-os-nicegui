@@ -251,13 +251,18 @@ def build_pago(
 
 
 def build_periodo(anio_mes: int) -> Periodo:
-    """Build a Periodo from an ``anio_mes`` value like 202304."""
+    """Build a closed Periodo from an ``anio_mes`` value like 202304.
+
+    Historical periods are imported as closed so they are protected from
+    accidental edits (NC assign/unassign, pago updates, deletion).
+    """
     anio, mes = divmod(anio_mes, 100)
     return Periodo(
         anio=anio,
         mes=mes,
         anio_mes=anio_mes,
         nombre_corto=f'{mes:02d}/{anio}',
+        cerrado=True,
     )
 
 
