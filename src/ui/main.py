@@ -14,7 +14,7 @@ import src.ui.pages.pagos  # noqa: F401  (registers the pagos page)
 from src.infrastructure.database import build_engine, create_schema
 
 UI_HOST = os.getenv('UI_HOST', '127.0.0.1')
-UI_PORT = int(os.getenv('UI_PORT', '8080'))
+UI_PORT = int(os.getenv('UI_PORT', '8081'))
 STORAGE_SECRET = os.getenv('STORAGE_SECRET', 'sos-reclamos-dev-secret')
 
 
