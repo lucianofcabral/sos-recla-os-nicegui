@@ -50,7 +50,10 @@ from src.ui.labels import AGENTE_LABELS, FORMA_PAGO_LABELS, TIPO_ENUM, TIPO_LABE
 from src.ui.widgets import (
     MAX_ERRORS_SHOWN,
     _text,
+    error_label,
+    form_footer,
     make_remove_handler,
+    modal,
     pagos_table,
     row_action_button,
 )
@@ -174,12 +177,9 @@ def _load_reclamos() -> dict[int, str]:
 
 
 def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-[32rem] max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
-        ui.label(f'Nuevo reclamo {TIPO_LABELS[TIPO_ENUM[tipo]]}').classes('text-h6')
+    with modal(
+        f'Nuevo reclamo {TIPO_LABELS[TIPO_ENUM[tipo]]}', width='w-[32rem]'
+    ) as dialog:
         with ui.grid(columns=2).classes('gap-4 w-full'):
             cliente = ui.input('Cliente').props('outlined')
             poliza = ui.input('Póliza').props('outlined')
@@ -294,7 +294,7 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
             ).props('unelevated color=primary')
             _render_pagos()
 
-        error = ui.label('').classes('text-negative')
+        error = error_label()
 
         def guardar() -> None:
             error.set_text('')
@@ -354,9 +354,7 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
             dialog.close()
             refresh()
 
-        with ui.row().classes('justify-between w-full'):
-            ui.button('Cancelar', on_click=dialog.close).props('flat')
-            ui.button('Guardar', on_click=guardar).props('unelevated color=primary')
+        form_footer(dialog, on_save=guardar)
     dialog.open()
 
 
@@ -364,12 +362,9 @@ def open_editar_reclamo(
     tipo: str, reclamo_id: int, refresh: Callable[[], None]
 ) -> None:
     current = _valores_actuales(tipo, reclamo_id)
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-[38rem] max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
-        ui.label(f'Editar reclamo {TIPO_LABELS[TIPO_ENUM[tipo]]}').classes('text-h6')
+    with modal(
+        f'Editar reclamo {TIPO_LABELS[TIPO_ENUM[tipo]]}', width='w-[38rem]'
+    ) as dialog:
         with ui.grid(columns=2).classes('gap-4 w-full'):
             cliente = ui.input('Cliente', value=current.get('cliente') or '').props(
                 'outlined'
@@ -402,7 +397,7 @@ def open_editar_reclamo(
                 if tipo == 'tresa'
                 else None
             )
-        error = ui.label('').classes('text-negative')
+        error = error_label()
 
         with ui.row().classes('items-center justify-between w-full'):
             ui.label('Pagos del reclamo').classes('text-subtitle2')
@@ -475,9 +470,7 @@ def open_editar_reclamo(
             dialog.close()
             refresh()
 
-        with ui.row().classes('justify-between w-full'):
-            ui.button('Cancelar', on_click=dialog.close).props('flat')
-            ui.button('Guardar', on_click=guardar).props('unelevated color=primary')
+        form_footer(dialog, on_save=guardar)
     dialog.open()
 
 
@@ -488,11 +481,7 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
         items: list[GrupoReclamoItem] = uow.list_grupo_detalle(grupo_id)
     selected_id: int | None = None
 
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-[44rem] max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
+    with modal(title=None, width='w-[44rem]') as dialog:
 
         def _render_gestiones() -> None:
             gestiones_container.clear()
@@ -543,7 +532,9 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
                     _on_row_clicked,
                     js_handler='(evt, row, index) => emit(row)',
                 )
-                row_action_button(table, 'editar', 'edit', _editar_gestion, event='click.stop')
+                row_action_button(
+                    table, 'editar', 'edit', _editar_gestion, event='click.stop'
+                )
 
         def _on_row_clicked(e: events.GenericEventArguments) -> None:
             nonlocal selected_id
@@ -631,7 +622,7 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
             ui.label(f'Fecha creación: {format_date(grupo.fecha_creacion)}')
             ui.label(f'Usuario creación: {grupo.usuario_creacion or "—"}')
 
-        error = ui.label('').classes('text-negative')
+        error = error_label()
         with ui.row().classes('gap-2 items-center w-full'):
             nombre = ui.input('Nombre del grupo', value=grupo.grupo).props('outlined')
             ui.button('Renombrar', on_click=_renombrar).props(
@@ -641,8 +632,7 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
         gestiones_container = ui.column().classes('gap-1 w-full')
         pagos_container = ui.column().classes('gap-1 w-full')
 
-        with ui.row().classes('justify-between w-full'):
-            ui.button('Cerrar', on_click=dialog.close).props('flat')
+        form_footer(dialog, on_save=None, cancel_label='Cerrar')
 
         _render_gestiones()
         _render_pagos()
@@ -667,12 +657,7 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
         if not reclamos:
             ui.notify('No hay reclamos activos para registrar un pago', type='warning')
             return
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-96 max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
-        ui.label('Nuevo Pago').classes('text-h6')
+    with modal('Nuevo Pago') as dialog:
         if reclamo_id is None:
             reclamo = ui.select(
                 options=reclamos, label='Reclamo (Dominio · Póliza · Cliente · Tipo)'
@@ -702,7 +687,7 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
         destinatario.bind_visibility_from(
             forma, 'value', lambda v: v != FormaPagoEnum.NOTA_DE_CREDITO
         )
-        error = ui.label('').classes('text-negative')
+        error = error_label()
 
         def guardar() -> None:
             error.set_text('')
@@ -731,9 +716,7 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
             dialog.close()
             on_exito()
 
-        with ui.row().classes('justify-between w-full'):
-            ui.button('Cancelar', on_click=dialog.close).props('flat')
-            ui.button('Guardar', on_click=guardar).props('unelevated color=primary')
+        form_footer(dialog, on_save=guardar)
     dialog.open()
 
 
@@ -794,8 +777,11 @@ def open_nuevo_lote_tres_arr(
                 row_key='idx',
             ).classes('w-full')
             row_action_button(
-                    table, 'quitar', 'delete', make_remove_handler(gestiones, _render_pendientes)
-                )
+                table,
+                'quitar',
+                'delete',
+                make_remove_handler(gestiones, _render_pendientes),
+            )
 
     def _agregar_gestion() -> None:
         error.set_text('')
@@ -839,12 +825,7 @@ def open_nuevo_lote_tres_arr(
             return
         if generar_pagos is not None:
             generar_pagos.set_value(True)
-        with (
-            ui.dialog() as dialog,
-            ui.card().classes('w-[32rem] max-w-full'),
-            ui.column().classes('gap-2 w-full'),
-        ):
-            ui.label('Pagar todas juntas').classes('text-h6')
+        with modal('Pagar todas juntas', width='w-[32rem]') as dialog:
             ui.label(
                 'Cargá el importe de las gestiones sin monto; '
                 'todas quedarán pagadas (SM → Prestador) al guardar.'
@@ -867,19 +848,10 @@ def open_nuevo_lote_tres_arr(
                     type='positive',
                 )
 
-            with ui.row().classes('justify-between w-full'):
-                ui.button('Cancelar', on_click=dialog.close).props('flat')
-                ui.button('Aplicar', on_click=_aplicar_importes).props(
-                    'unelevated color=primary'
-                )
+            form_footer(dialog, on_save=_aplicar_importes, save_label='Aplicar')
         dialog.open()
 
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-[42rem] max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
-        ui.label('Nuevo Lote 3 Arroyos').classes('text-h6')
+    with modal('Nuevo Lote 3 Arroyos', width='w-[42rem]') as dialog:
         grupo = ui.input('Grupo (lote)').props('outlined')
         generar_pagos = ui.checkbox(
             'Generar pagos (SM → Prestador por transferencia)',
@@ -920,7 +892,7 @@ def open_nuevo_lote_tres_arr(
         pending_container = ui.column().classes('gap-1 w-full')
         _render_pendientes()
 
-        error = ui.label('').classes('text-negative')
+        error = error_label()
 
         def guardar() -> None:
             error.set_text('')
@@ -983,32 +955,29 @@ def open_nuevo_lote_tres_arr(
             ui.notify('Lote guardado: ' + ', '.join(partes), type='positive')
             refresh()
 
-        with ui.row().classes('justify-between w-full'):
-            ui.button('Cancelar', on_click=dialog.close).props('flat')
-            with ui.row().classes('gap-2'):
-                ui.button(
-                    'Pagar todas juntas',
-                    icon='payments',
-                    on_click=_pagar_todas,
-                ).props('flat color=primary')
-                ui.button('Guardar lote', on_click=guardar).props(
-                    'unelevated color=primary'
-                )
+        form_footer(
+            dialog,
+            on_save=guardar,
+            save_label='Guardar lote',
+            extra_right=[
+                {
+                    'label': 'Pagar todas juntas',
+                    'icon': 'payments',
+                    'props': 'flat color=primary',
+                    'handler': _pagar_todas,
+                }
+            ],
+        )
     dialog.open()
 
 
 def open_nuevo_ciclo(refresh: Callable[[], None]) -> None:
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-96 max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
-        ui.label('Nuevo Ciclo').classes('text-h6')
+    with modal('Nuevo Ciclo') as dialog:
         today = date.today()
         anio = ui.number('Año', value=today.year).props('outlined')
         mes = ui.number('Mes', value=today.month).props('outlined')
         nombre_corto = ui.input('Nombre Corto (opcional)').props('outlined')
-        error = ui.label('').classes('text-negative')
+        error = error_label()
 
         def guardar() -> None:
             error.set_text('')
@@ -1030,9 +999,7 @@ def open_nuevo_ciclo(refresh: Callable[[], None]) -> None:
             dialog.close()
             refresh()
 
-        with ui.row().classes('justify-between w-full'):
-            ui.button('Cancelar', on_click=dialog.close).props('flat')
-            ui.button('Guardar', on_click=guardar).props('unelevated color=primary')
+        form_footer(dialog, on_save=guardar)
     dialog.open()
 
 
@@ -1063,12 +1030,7 @@ def open_importar_sos(refresh: Callable[[], None]) -> None:
                 rest = len(errores) - MAX_ERRORS_SHOWN
                 ui.label(f'... y {rest} errores más.').classes('text-caption')
 
-    with (
-        ui.dialog() as dialog,
-        ui.card().classes('w-[38rem] max-w-full'),
-        ui.column().classes('gap-2 w-full'),
-    ):
-        ui.label('Importar SOS desde Excel').classes('text-h6')
+    with modal('Importar SOS desde Excel', width='w-[38rem]') as dialog:
         ui.label(
             'Seleccioná el archivo Gestión Reclamos Y Reintegros.xlsx '
             '(upsert por N° Gestión)'
@@ -1101,7 +1063,7 @@ def open_importar_sos(refresh: Callable[[], None]) -> None:
 
         filename = ui.label('').classes('text-caption text-grey-7')
         preview = ui.label('').classes('text-caption')
-        error = ui.label('').classes('text-negative')
+        error = error_label()
         errores_container = ui.column().classes('gap-0 w-full')
 
         async def _run_import() -> None:

@@ -18,6 +18,7 @@ from src.infrastructure.import_ledger import (
 )
 from src.infrastructure.unit_of_work import SqlModelUnitOfWork
 from src.ui.layout import page
+from src.ui.widgets import MAX_ERRORS_SHOWN, form_footer, modal
 
 REPORT_LABELS: dict[str, str] = {
     'sos': 'Reclamos SOS',
@@ -30,8 +31,6 @@ REPORT_LABELS: dict[str, str] = {
     'documentos': 'Documentos',
     'entidad_documentos': 'Documentos por entidad',
 }
-
-MAX_ERRORS_SHOWN = 50
 
 
 def _migrate(old_path: str, apply: bool) -> dict:
@@ -115,19 +114,13 @@ def migracion(user: User) -> None:
             _start_import(apply)
 
     def _confirm_apply(apply: bool) -> None:
-        with (
-            ui.dialog() as dialog,
-            ui.card().classes('w-96 max-w-full'),
-            ui.column().classes('gap-2 w-full'),
-        ):
-            ui.label('Confirmar importación').classes('text-h6')
+        with modal('Confirmar importación') as dialog:
             ui.label('Esto escribe los cambios en la base actual. ¿Continuar?')
-            with ui.row().classes('justify-between w-full'):
-                ui.button('Cancelar', on_click=dialog.close).props('flat')
-                ui.button(
-                    'Importar',
-                    on_click=lambda: _start_import(apply, dialog),
-                ).props('unelevated color=primary')
+            form_footer(
+                dialog,
+                on_save=lambda: _start_import(apply, dialog),
+                save_label='Importar',
+            )
         dialog.open()
 
     def _start_import(apply: bool, dialog: ui.dialog | None = None) -> None:

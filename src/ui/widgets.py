@@ -1,6 +1,7 @@
 """Shared NiceGUI widgets and helpers (pure presentation: rows + callbacks only)."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any, cast
 
 from nicegui import events, ui
@@ -82,3 +83,57 @@ def make_remove_handler(
         on_remove()
 
     return _handler
+
+
+@contextmanager
+def modal(title: str | None = None, width: str = 'w-96') -> Iterator[ui.dialog]:
+    """Dialog shell: card(width) + column + optional h6 title; yields the dialog.
+
+    ``title=None`` leaves the header to the caller (mutable group header case).
+    """
+    with (
+        ui.dialog() as dialog,
+        ui.card().classes(f'{width} max-w-full'),
+        ui.column().classes('gap-2 w-full'),
+    ):
+        if title is not None:
+            ui.label(title).classes('text-h6')
+        yield dialog
+
+
+def form_footer(
+    dialog,
+    on_save=None,
+    *,
+    save_label: str = 'Guardar',
+    cancel_label: str = 'Cancelar',
+    extra_right: list[dict[str, Any]] | None = None,
+) -> None:
+    """Render the footer row: flat cancel + primary save button.
+
+    ``extra_right`` dicts ``{label, icon, props, handler}`` nest in a ``gap-2``
+    row with the save button; ``on_save=None`` renders a cancel-only footer.
+    """
+    with ui.row().classes('justify-between w-full'):
+        ui.button(cancel_label, on_click=dialog.close).props('flat')
+        if on_save is not None:
+            if extra_right:
+                with ui.row().classes('gap-2'):
+                    for item in extra_right:
+                        ui.button(
+                            item['label'],
+                            icon=item.get('icon'),
+                            on_click=item['handler'],
+                        ).props(item.get('props', ''))
+                    ui.button(save_label, on_click=on_save).props(
+                        'unelevated color=primary'
+                    )
+            else:
+                ui.button(save_label, on_click=on_save).props(
+                    'unelevated color=primary'
+                )
+
+
+def error_label(text: str = '') -> ui.label:
+    """Return a label pre-styled for inline form errors."""
+    return ui.label(text).classes('text-negative')
