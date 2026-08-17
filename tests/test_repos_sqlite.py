@@ -299,6 +299,18 @@ def test_periodo_save_get_list(session: Session) -> None:
         repo.get(999)
 
 
+def test_periodo_update_cambia_cerrado(session: Session) -> None:
+    repo = SqlModelPeriodoRepository(session)
+    saved = repo.save(Periodo(anio=2026, mes=1))
+    assert saved.id is not None
+    assert repo.get(saved.id).cerrado is False
+    updated = repo.update(saved.model_copy(update={'cerrado': True}))
+    assert updated.cerrado is True
+    assert repo.get(saved.id).cerrado is True
+    with pytest.raises(EntityNotFoundError):
+        repo.update(Periodo(id=999, cerrado=True))
+
+
 def test_factura_save_and_list_by_periodo(session: Session) -> None:
     facturas = SqlModelFacturaRepository(session)
     periodo = _periodo(session, 2026, 1)
@@ -351,6 +363,26 @@ def test_credit_note_get_embeds_pago_and_periodo(session: Session) -> None:
     assert found.periodo.id == p1.id
     with pytest.raises(EntityNotFoundError):
         credit_notes.get(999)
+
+
+def test_credit_note_get_by_pago_id(session: Session) -> None:
+    reclamos = SqlModelReclamoRepository(session)
+    pagos = SqlModelPagoRepository(session)
+    credit_notes = SqlModelCreditNoteRepository(session)
+    reclamo_id = _reclamo_id(session, reclamos)
+    pago = pagos.save(_pago_nc().model_copy(update={'reclamo_id': reclamo_id}))
+    assert pago.id is not None
+    p1 = _periodo(session, 2026, 1)
+    nc = credit_notes.save(CreditNote(pago_id=pago.id, periodo_id=p1.id))
+    assert nc.id is not None
+    found = credit_notes.get_by_pago_id(pago.id)
+    assert found is not None
+    assert found.id == nc.id
+    assert found.pago is not None
+    assert found.pago.id == pago.id
+    assert found.periodo is not None
+    assert found.periodo.id == p1.id
+    assert credit_notes.get_by_pago_id(999) is None
 
 
 def test_credit_note_update_changes_periodo(session: Session) -> None:

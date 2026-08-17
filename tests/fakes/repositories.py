@@ -199,6 +199,12 @@ class FakePeriodoRepository(_InMemoryRepository[Periodo]):
     def save(self, periodo: Periodo) -> Periodo:
         return self._save(periodo)
 
+    def update(self, periodo: Periodo) -> Periodo:
+        if periodo.id is None or periodo.id not in self._store:
+            raise EntityNotFoundError(f'periodo {periodo.id} not found')
+        self._store[periodo.id] = periodo
+        return periodo
+
 
 class FakeFacturaRepository(_InMemoryRepository[Factura]):
     """In-memory implementation of FacturaRepositoryPort."""
@@ -226,6 +232,12 @@ class FakeCreditNoteRepository(_InMemoryRepository[CreditNote]):
 
     def save(self, credit_note: CreditNote) -> CreditNote:
         return self._save(credit_note)
+
+    def get_by_pago_id(self, pago_id: int) -> CreditNote | None:
+        for credit_note in self._store.values():
+            if credit_note.pago_id == pago_id:
+                return credit_note
+        return None
 
     def update(self, credit_note: CreditNote) -> CreditNote:
         if credit_note.id is None or credit_note.id not in self._store:

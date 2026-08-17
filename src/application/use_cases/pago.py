@@ -67,6 +67,18 @@ class PagoActualizar:
                             'una nota de crédito no permite cambiar '
                             'forma de pago ni actores'
                         )
+                nc = self._uow.credit_notes.get_by_pago_id(data.id)
+                if nc is not None and nc.periodo_id is not None:
+                    periodo = (
+                        nc.periodo
+                        if nc.periodo is not None
+                        else self._uow.periodos.get(nc.periodo_id)
+                    )
+                    if periodo.cerrado:
+                        raise DomainError(
+                            'no se puede editar una nota de crédito '
+                            'de un periodo cerrado'
+                        )
                 editable = ('monto', 'fecha_pago')
             else:
                 editable = (

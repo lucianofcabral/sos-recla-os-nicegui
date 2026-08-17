@@ -72,6 +72,7 @@ class PeriodoRow(SQLModel, table=True):
     nombre_largo: str | None = None
     fecha_inicio: date | None = None
     fecha_fin: date | None = None
+    cerrado: bool = False
 
     facturas: list['FacturaRow'] = Relationship(back_populates='periodo')
     credit_notes: list['CreditNoteRow'] = Relationship(back_populates='periodo')
@@ -86,6 +87,7 @@ class PeriodoRow(SQLModel, table=True):
             nombre_largo=self.nombre_largo,
             fecha_inicio=self.fecha_inicio,
             fecha_fin=self.fecha_fin,
+            cerrado=self.cerrado,
         )
 
     @classmethod
@@ -99,6 +101,7 @@ class PeriodoRow(SQLModel, table=True):
             nombre_largo=entity.nombre_largo,
             fecha_inicio=entity.fecha_inicio,
             fecha_fin=entity.fecha_fin,
+            cerrado=entity.cerrado,
         )
 
 

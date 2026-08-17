@@ -264,6 +264,7 @@ class SqlModelUnitOfWork:
                     suma_importe_facturas=suma_facturas,
                     cant_notas_credito=cant_ncs,
                     suma_importe_notas_credito=suma_ncs,
+                    cerrado=periodo.cerrado,
                 )
             )
         return cards

@@ -40,6 +40,7 @@ class Periodo(BaseModel):
     nombre_largo: str | None = None
     fecha_inicio: date | None = None
     fecha_fin: date | None = None
+    cerrado: bool = False
 
 
 class Factura(BaseModel):

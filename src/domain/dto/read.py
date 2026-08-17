@@ -160,6 +160,7 @@ class CicloCard(BaseModel):
     suma_importe_facturas: float = 0.0
     cant_notas_credito: int = 0
     suma_importe_notas_credito: float = 0.0
+    cerrado: bool = False
 
 
 class LoteTresArrResult(BaseModel):

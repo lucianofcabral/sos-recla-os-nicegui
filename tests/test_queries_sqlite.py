@@ -169,6 +169,19 @@ def test_sql_ciclos(engine) -> None:
     assert card.suma_importe_facturas == 3000.5
     assert card.cant_notas_credito == 1
     assert card.suma_importe_notas_credito == 5000.0
+    assert card.cerrado is False
+
+
+def test_sql_ciclos_propaga_cerrado(engine) -> None:
+    _seed(engine)
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        periodo = uow.periodos.list()[0]
+        assert periodo.id is not None
+        uow.periodos.update(periodo.model_copy(update={'cerrado': True}))
+        uow.commit()
+        cards = uow.list_ciclos()
+    assert len(cards) == 1
+    assert cards[0].cerrado is True
 
 
 def _seed_filtros(engine) -> None:

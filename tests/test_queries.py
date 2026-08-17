@@ -13,7 +13,7 @@ from src.application.queries import (
 from src.application.use_cases.factura import FacturaNueva
 from src.application.use_cases.nota_credito import AsignarNotaCreditoAPeriodo
 from src.application.use_cases.pago import PagoNuevo
-from src.application.use_cases.periodo import PeriodoNuevo
+from src.application.use_cases.periodo import PeriodoCerrar, PeriodoNuevo
 from src.application.use_cases.reclamo import (
     OtrosReclamoNuevo,
     SosReclamoNuevo,
@@ -140,6 +140,18 @@ def test_list_ciclos() -> None:
     assert card.suma_importe_facturas == 3000.5
     assert card.cant_notas_credito == 1
     assert card.suma_importe_notas_credito == 5000.0
+    assert card.cerrado is False
+
+
+def test_list_ciclos_propaga_cerrado() -> None:
+    uow = _dataset()
+    with uow:
+        periodo = uow.periodos.list()[0]
+        assert periodo.id is not None
+        PeriodoCerrar(uow)(periodo.id)
+    cards = list_ciclos(uow)
+    assert len(cards) == 1
+    assert cards[0].cerrado is True
 
 
 def _set_created(uow: FakeUnitOfWork, reclamo_id: int, when: datetime) -> None:

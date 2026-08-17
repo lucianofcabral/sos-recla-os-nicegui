@@ -269,6 +269,16 @@ class SqlModelPeriodoRepository:
         self._session.flush()
         return row.to_entity()
 
+    def update(self, periodo: Periodo) -> Periodo:
+        if periodo.id is None:
+            raise EntityNotFoundError('periodo None not found')
+        existing = self._session.get(PeriodoRow, periodo.id)
+        if existing is None:
+            raise EntityNotFoundError(f'periodo {periodo.id} not found')
+        row = self._session.merge(PeriodoRow.from_entity(periodo))
+        self._session.flush()
+        return row.to_entity()
+
 
 class SqlModelFacturaRepository:
     """SQLModel-backed implementation of FacturaRepositoryPort."""
@@ -324,6 +334,20 @@ class SqlModelCreditNoteRepository:
         row = self._session.exec(statement).first()
         if row is None:
             raise EntityNotFoundError(f'credit note {credit_note_id} not found')
+        return row.to_entity()
+
+    def get_by_pago_id(self, pago_id: int) -> CreditNote | None:
+        statement = (
+            select(CreditNoteRow)
+            .where(CreditNoteRow.pago_id == pago_id)
+            .options(
+                selectinload(CreditNoteRow.pago),
+                selectinload(CreditNoteRow.periodo),
+            )
+        )
+        row = self._session.exec(statement).first()
+        if row is None:
+            return None
         return row.to_entity()
 
     def save(self, credit_note: CreditNote) -> CreditNote:

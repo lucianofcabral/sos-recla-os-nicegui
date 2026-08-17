@@ -234,6 +234,7 @@ class FakeUnitOfWork:
                     suma_importe_notas_credito=sum(
                         self._credit_note_monto(cn) for cn in credit_notes
                     ),
+                    cerrado=periodo.cerrado,
                 )
             )
         return cards
