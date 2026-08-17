@@ -55,6 +55,7 @@ from src.ui.labels import AGENTE_LABELS, FORMA_PAGO_LABELS, TIPO_ENUM, TIPO_LABE
 from src.ui.widgets import (
     MAX_ERRORS_SHOWN,
     _text,
+    date_picker,
     error_label,
     form_footer,
     make_remove_handler,
@@ -234,7 +235,7 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
         if tipo == 'especial':
             ui.label('Pagos del reclamo').classes('text-subtitle1')
             with ui.row().classes('gap-2 w-full flex-wrap'):
-                fecha_pago = ui.date(value=date.today())
+                fecha_pago = date_picker('Fecha de Pago', value=date.today())
                 forma_pago = ui.select(options=FORMA_PAGO_LABELS, label='Forma de Pago')
                 monto_pago = ui.number('Importe', format='%.2f', value=0).props(
                     'outlined'
@@ -304,6 +305,9 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
                         error.set_text('el pagador no puede ser igual al destinatario')
                         return
                 fecha_val = fecha_pago.value
+                if not fecha_val:
+                    error.set_text('Seleccioná la fecha de pago')
+                    return
                 pagos.append(
                     {
                         'fecha': (
@@ -319,7 +323,7 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
                 )
                 monto_pago.set_value(0)
                 forma_pago.set_value(None)
-                fecha_pago.set_value(date.today())
+                fecha_pago.set_value(date.today().isoformat())
                 _render_pagos()
 
             ui.button(
@@ -715,7 +719,7 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
                 f'{reclamo_fijo.poliza or ""} · {reclamo_fijo.cliente or ""}'
             ).classes('text-caption')
             reclamo = None
-        fecha = ui.date(value=date.today())
+        fecha = date_picker('Fecha de Pago', value=date.today())
         forma = ui.select(options=FORMA_PAGO_LABELS, label='Forma de Pago')
         monto = ui.number('Importe', format='%.2f', value=0).props('outlined')
         pagador = ui.select(options=AGENTE_LABELS, label='Pagador').props('outlined')
@@ -739,6 +743,9 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
             target_id = reclamo.value if reclamo is not None else reclamo_id
             if target_id is None or forma.value is None:
                 error.set_text('Reclamo y Forma de Pago son obligatorios')
+                return
+            if not fecha.value:
+                error.set_text('Seleccioná la fecha de pago')
                 return
             es_nc = forma.value == FormaPagoEnum.NOTA_DE_CREDITO
             data = PagoCreate(
@@ -771,7 +778,7 @@ def _dialogo_editar_pago(pago_id: int, on_exito: Callable[[], None]) -> None:
         pago = uow.pagos.get(pago_id)
     es_nc = pago.forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
     with modal('Editar Pago') as dialog:
-        fecha = ui.date(value=pago.fecha_pago or date.today())
+        fecha = date_picker('Fecha de Pago', value=pago.fecha_pago or date.today())
         forma = ui.select(
             options=FORMA_PAGO_LABELS, label='Forma de Pago', value=pago.forma_pago
         )
@@ -800,6 +807,9 @@ def _dialogo_editar_pago(pago_id: int, on_exito: Callable[[], None]) -> None:
 
         def guardar() -> None:
             error.set_text('')
+            if not fecha.value:
+                error.set_text('Seleccioná la fecha de pago')
+                return
             try:
                 with uow_per_request() as uow:
                     PagoActualizar(uow)(

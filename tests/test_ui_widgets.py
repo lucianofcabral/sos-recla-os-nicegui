@@ -48,7 +48,13 @@ def _module_imports(path: pathlib.Path) -> set[str]:
 def test_ui_widgets_purity() -> None:
     """widgets.py and labels.py must not import ORM/UoW/query layers (backs R7)."""
     widgets_imports = _module_imports(pathlib.Path('src/ui/widgets.py'))
-    assert widgets_imports == {'nicegui', 'collections.abc', 'contextlib', 'typing'}
+    assert widgets_imports == {
+        'nicegui',
+        'collections.abc',
+        'contextlib',
+        'datetime',
+        'typing',
+    }
 
     labels_imports = _module_imports(pathlib.Path('src/ui/labels.py'))
     assert labels_imports == {'src.domain.domain_enums'}

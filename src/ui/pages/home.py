@@ -22,7 +22,7 @@ from src.ui.dialogos import (
 )
 from src.ui.labels import TIPO_FILTRO_OPTIONS, TIPO_KEY, TIPO_LABELS
 from src.ui.layout import page
-from src.ui.widgets import _text, row_action_button
+from src.ui.widgets import _text, date_picker, row_action_button
 
 COLUMNS: list[dict] = [
     {'name': 'dominio', 'label': 'Dominio', 'field': 'dominio', 'sortable': True},
@@ -107,18 +107,6 @@ def _parse_fecha(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
 
 
-def _date_picker(label: str) -> ui.input:
-    """Date input whose calendar opens in a popup (value string YYYY-MM-DD or '')."""
-    with ui.input(label, value='').props('outlined dense clearable') as date_input:
-        with ui.popup() as popup:
-            picker = ui.date(value=None)
-            picker.bind_value(date_input)
-            picker.on('change', popup.close)
-        with date_input.add_slot('append'):
-            ui.icon('edit_calendar').on('click', popup.open).classes('cursor-pointer')
-    return date_input
-
-
 def _checkbox_par(si: bool, no: bool) -> bool | None:
     if si and not no:
         return True
@@ -163,8 +151,8 @@ def home(user: User) -> None:
                 )
                 ui.button('Limpiar', on_click=lambda: _limpiar_filtro()).props('flat')
             with ui.row().classes('gap-4 items-end flex-wrap'):
-                fecha_desde = _date_picker('Desde')
-                fecha_hasta = _date_picker('Hasta')
+                fecha_desde = date_picker('Desde')
+                fecha_hasta = date_picker('Hasta')
                 importe_min = ui.number('Importe min', value=None).props(
                     'outlined dense clearable'
                 )

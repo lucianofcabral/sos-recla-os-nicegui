@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import date
 from typing import Any, cast
 
 from nicegui import events, ui
@@ -138,3 +139,27 @@ def form_footer(
 def error_label(text: str = '') -> ui.label:
     """Return a label pre-styled for inline form errors."""
     return ui.label(text).classes('text-negative')
+
+
+def date_picker(
+    label: str,
+    value: date | None = None,
+    *,
+    clearable: bool = True,
+    dense: bool = True,
+) -> ui.input:
+    """Date input whose calendar opens in a popup (value string YYYY-MM-DD or '')."""
+    initial = value.isoformat() if value else ''
+    props = 'outlined'
+    if dense:
+        props += ' dense'
+    if clearable:
+        props += ' clearable'
+    with ui.input(label, value=initial).props(props) as date_input:
+        with ui.popup() as popup:
+            picker = ui.date(value=initial or None)
+            picker.bind_value(date_input)
+            picker.on('change', popup.close)
+        with date_input.add_slot('append'):
+            ui.icon('edit_calendar').on('click', popup.open).classes('cursor-pointer')
+    return date_input
