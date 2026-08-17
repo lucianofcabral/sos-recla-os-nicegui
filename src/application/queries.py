@@ -2,6 +2,7 @@
 
 from src.domain.dto.read import (
     CicloCard,
+    PagoListFilter,
     PagoListItem,
     ReclamoHomeFilter,
     ReclamoHomeItem,
@@ -19,8 +20,10 @@ def list_grupos(uow: QueryPort) -> list[str]:
     return uow.list_grupos()
 
 
-def list_pagos_con_detalle(uow: QueryPort) -> list[PagoListItem]:
-    return uow.list_pagos_con_detalle()
+def list_pagos_con_detalle(
+    uow: QueryPort, filtro: PagoListFilter | None = None
+) -> list[PagoListItem]:
+    return uow.list_pagos_con_detalle(filtro)
 
 
 def list_ciclos(uow: QueryPort) -> list[CicloCard]:

@@ -11,14 +11,14 @@ from src.application.queries import list_pagos_con_detalle
 from src.application.use_cases.nota_credito import NotaCreditoBorrar
 from src.application.use_cases.pago import PagoBorrar
 from src.domain.domain_enums import FormaPagoEnum
-from src.domain.dto.read import PagoListItem
+from src.domain.dto.read import PagoListFilter, PagoListItem
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import User
 from src.ui.deps import uow_per_request
-from src.ui.dialogos import open_nuevo_pago
-from src.ui.labels import FORMA_PAGO_LABELS
+from src.ui.dialogos import open_editar_pago, open_nuevo_pago
+from src.ui.labels import AGENTE_LABELS, FORMA_PAGO_LABELS
 from src.ui.layout import page
-from src.ui.widgets import pagos_table
+from src.ui.widgets import pagos_table, row_action_button
 
 COLUMNS: list[dict] = [
     {'name': 'fecha_pago', 'label': 'Fecha Ingresado', 'field': 'fecha_pago'},
@@ -27,6 +27,7 @@ COLUMNS: list[dict] = [
     {'name': 'forma_pago', 'label': 'Forma de Pago', 'field': 'forma_pago'},
     {'name': 'dominio', 'label': 'Dominio', 'field': 'dominio'},
     {'name': 'poliza', 'label': 'Póliza', 'field': 'poliza'},
+    {'name': 'grupo', 'label': 'Grupo', 'field': 'grupo'},
     {'name': 'cliente', 'label': 'Cliente', 'field': 'cliente'},
     {'name': 'nro_gestion', 'label': 'Nro. Gestión SOS', 'field': 'nro_gestion'},
     {'name': 'monto', 'label': 'Importe', 'field': 'monto', 'align': 'right'},
@@ -54,6 +55,7 @@ def _row(item: PagoListItem, credit_note_by_pago: dict[int, int]) -> dict:
         ),
         'dominio': item.dominio or '',
         'poliza': item.poliza or '',
+        'grupo': item.grupo or '',
         'cliente': item.cliente or '',
         'nro_gestion': str(item.nro_gestion) if item.nro_gestion is not None else '',
         'monto': format_money(item.monto),
@@ -77,9 +79,9 @@ def _credit_notes_by_pago_id(uow) -> dict[int, int]:
     return result
 
 
-def _load_rows() -> list[dict]:
+def _load_rows(filtro: PagoListFilter | None = None) -> list[dict]:
     with uow_per_request() as uow:
-        items = list_pagos_con_detalle(uow)
+        items = list_pagos_con_detalle(uow, filtro)
         credit_note_by_pago = _credit_notes_by_pago_id(uow)
     return [_row(item, credit_note_by_pago) for item in items]
 
@@ -94,8 +96,57 @@ def pagos(user: User) -> None:
                 on_click=lambda: open_nuevo_pago(refresh_table),
             )
 
+        with (
+            ui.card().classes('w-full'),
+            ui.row().classes('gap-4 items-center flex-wrap'),
+        ):
+            pagador = ui.select(
+                options=AGENTE_LABELS,
+                label='Pagador',
+                multiple=True,
+                with_input=True,
+                clearable=True,
+            ).props('outlined dense')
+            destinatario = ui.select(
+                options=AGENTE_LABELS,
+                label='Destinatario',
+                multiple=True,
+                with_input=True,
+                clearable=True,
+            ).props('outlined dense')
+            forma = ui.select(
+                options=FORMA_PAGO_LABELS,
+                label='Forma de Pago',
+                multiple=True,
+                with_input=True,
+                clearable=True,
+            ).props('outlined dense')
+            texto = ui.input('Buscar (dominio, cliente, grupo, póliza)').props(
+                'outlined dense clearable :debounce="500"'
+            )
+            ui.button('Filtrar', on_click=lambda: refresh_table()).props(
+                'unelevated color=primary'
+            )
+            ui.button('Limpiar', on_click=lambda: _limpiar_filtro()).props('flat')
+
+        def _build_filtro() -> PagoListFilter | None:
+            filtro = PagoListFilter(
+                pagadores=set(pagador.value) if pagador.value else None,
+                destinatarios=set(destinatario.value) if destinatario.value else None,
+                formas=set(forma.value) if forma.value else None,
+                texto=texto.value.strip() or None,
+            )
+            return None if filtro.is_empty() else filtro
+
         def refresh_table() -> None:
-            table.update_rows(_load_rows())
+            table.update_rows(_load_rows(_build_filtro()))
+
+        def _limpiar_filtro() -> None:
+            pagador.set_value(None)
+            destinatario.set_value(None)
+            forma.set_value(None)
+            texto.set_value('')
+            refresh_table()
 
         def on_delete(e: events.GenericEventArguments) -> None:
             row = cast(Any, e.args)
@@ -112,11 +163,23 @@ def pagos(user: User) -> None:
                 return
             refresh_table()
 
+        def on_edit(e: events.GenericEventArguments) -> None:
+            row = cast(Any, e.args)
+            pago_id = int(row['pago_id'])
+            open_editar_pago(pago_id, refresh_table)
+
         table = pagos_table(
             _load_rows(),
             columns=COLUMNS,
-            actions='eliminar',
-            on_action=on_delete,
-            action_props='flat dense color=negative',
+            actions='editar',
+            action_icon='edit',
+            on_action=on_edit,
             classes='',
+        )
+        row_action_button(
+            table,
+            'eliminar',
+            'delete',
+            on_delete,
+            props='flat dense color=negative',
         )

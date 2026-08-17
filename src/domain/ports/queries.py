@@ -7,6 +7,7 @@ from typing import Protocol, runtime_checkable
 from src.domain.dto.read import (
     CicloCard,
     GrupoReclamoItem,
+    PagoListFilter,
     PagoListItem,
     ReclamoHomeFilter,
     ReclamoHomeItem,
@@ -23,7 +24,9 @@ class QueryPort(Protocol):
 
     def list_grupos(self) -> list[str]: ...
 
-    def list_pagos_con_detalle(self) -> list[PagoListItem]: ...
+    def list_pagos_con_detalle(
+        self, filtro: PagoListFilter | None = None
+    ) -> list[PagoListItem]: ...
 
     def list_grupo_detalle(self, grupo_id: int) -> list[GrupoReclamoItem]: ...
 

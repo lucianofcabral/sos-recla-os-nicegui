@@ -34,6 +34,7 @@ from src.domain.domain_enums import FormaPagoEnum
 from src.domain.dto.read import (
     CicloCard,
     GrupoReclamoItem,
+    PagoListFilter,
     PagoListItem,
     ReclamoHomeFilter,
     ReclamoHomeItem,
@@ -134,8 +135,10 @@ class SqlModelUnitOfWork:
         rows = self._session.exec(select(GrupoRow.grupo).order_by(GrupoRow.grupo)).all()
         return [grupo for grupo in rows if grupo is not None]
 
-    def list_pagos_con_detalle(self) -> list[PagoListItem]:
-        """Pagos listing with reclamo detail and SOS nro_gestion (no N+1)."""
+    def list_pagos_con_detalle(
+        self, filtro: PagoListFilter | None = None
+    ) -> list[PagoListItem]:
+        """Pagos listing with reclamo detail, SOS nro_gestion and grupo (no N+1)."""
         pagos = self.pagos.list()
         reclamo_ids = {p.reclamo_id for p in pagos if p.reclamo_id is not None}
         nro_por_reclamo: dict[int, int] = {}
@@ -146,6 +149,14 @@ class SqlModelUnitOfWork:
             for sos in sos_rows:
                 if sos.reclamo_id is not None:
                     nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
+        grupo_por_reclamo: dict[int, str] = {}
+        if reclamo_ids:
+            tres_rows = self._session.exec(
+                select(TresArrRow).where(TresArrRow.reclamo_id.in_(reclamo_ids))
+            ).all()
+            for tres in tres_rows:
+                if tres.reclamo_id is not None and tres.grupo is not None:
+                    grupo_por_reclamo[tres.reclamo_id] = tres.grupo
         items: list[PagoListItem] = []
         for pago in pagos:
             assert pago.id is not None
@@ -166,9 +177,16 @@ class SqlModelUnitOfWork:
                         if pago.reclamo_id is not None
                         else None
                     ),
+                    grupo=(
+                        grupo_por_reclamo.get(pago.reclamo_id)
+                        if pago.reclamo_id is not None
+                        else None
+                    ),
                 )
             )
-        return items
+        if filtro is None or filtro.is_empty():
+            return items
+        return [item for item in items if filtro.matches(item)]
 
     def list_grupo_detalle(self, grupo_id: int) -> list[GrupoReclamoItem]:
         """Gestions of a Tres Arroyos group with pago detail (no N+1)."""

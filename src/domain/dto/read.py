@@ -96,6 +96,46 @@ class PagoListItem(BaseModel):
     poliza: str | None = None
     cliente: str | None = None
     nro_gestion: int | None = None
+    grupo: str | None = None
+
+
+class PagoListFilter(BaseModel):
+    """Optional filter criteria for the pagos listing."""
+
+    pagadores: set[AgenteEnum] | None = None
+    destinatarios: set[AgenteEnum] | None = None
+    formas: set[FormaPagoEnum] | None = None
+    texto: str | None = None
+
+    def is_empty(self) -> bool:
+        """Return True when no criterion is set (all fields None)."""
+        return all(
+            value is None
+            for value in (self.pagadores, self.destinatarios, self.formas, self.texto)
+        )
+
+    def matches(self, item: PagoListItem) -> bool:
+        """Return True when the item satisfies every set criterion."""
+        if self.pagadores and item.pagador not in self.pagadores:
+            return False
+        if self.destinatarios and item.destinatario not in self.destinatarios:
+            return False
+        if self.formas and item.forma_pago not in self.formas:
+            return False
+        if self.texto:
+            haystack = ' '.join(
+                text
+                for text in (
+                    item.dominio or '',
+                    item.cliente or '',
+                    item.grupo or '',
+                    item.poliza or '',
+                )
+                if text
+            ).lower()
+            if self.texto.lower() not in haystack:
+                return False
+        return True
 
 
 class GrupoReclamoItem(BaseModel):

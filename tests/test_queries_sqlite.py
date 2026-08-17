@@ -13,7 +13,7 @@ from src.domain.domain_enums import (
     FormaPagoEnum,
     TipoReclamoEnum,
 )
-from src.domain.dto.read import ReclamoHomeFilter
+from src.domain.dto.read import PagoListFilter, ReclamoHomeFilter
 from src.domain.models.entities import (
     CreditNote,
     Factura,
@@ -125,10 +125,36 @@ def test_sql_pagos_con_detalle(engine) -> None:
         assert item.poliza == 'P-001'
         assert item.cliente == 'ACME'
         assert item.nro_gestion == 1001
+        assert item.grupo is None
     assert items[0].forma_pago == FormaPagoEnum.TRANSFERENCIA
     assert items[0].monto == 8000.0
     assert items[1].forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
     assert items[1].monto == 5000.0
+
+
+def test_sql_pagos_grupo_y_filtros(engine) -> None:
+    _seed_filtros(engine)
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        items = uow.list_pagos_con_detalle()
+        por_pagador = uow.list_pagos_con_detalle(
+            PagoListFilter(pagadores={AgenteEnum.SOS})
+        )
+        por_texto = uow.list_pagos_con_detalle(PagoListFilter(texto='grupo norte'))
+        por_forma = uow.list_pagos_con_detalle(
+            PagoListFilter(formas={FormaPagoEnum.TRANSFERENCIA})
+        )
+    assert len(items) == 3
+    tresa = next(it for it in items if it.dominio == 'CD456EF')
+    assert tresa.grupo == 'GRUPO NORTE'
+    assert tresa.pagador == AgenteEnum.SOS
+    sos = next(it for it in items if it.dominio == 'AB123CD')
+    assert sos.grupo is None
+    assert len(por_pagador) == 1
+    assert por_pagador[0].dominio == 'CD456EF'
+    assert len(por_texto) == 1
+    assert por_texto[0].dominio == 'CD456EF'
+    assert len(por_forma) == 1
+    assert por_forma[0].dominio == 'AB123CD'
 
 
 def test_sql_ciclos(engine) -> None:

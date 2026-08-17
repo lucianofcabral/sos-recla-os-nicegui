@@ -840,6 +840,10 @@ def open_nuevo_pago(refresh: Callable[[], None]) -> None:
     _dialogo_nuevo_pago(None, refresh)
 
 
+def open_editar_pago(pago_id: int, on_exito: Callable[[], None]) -> None:
+    _dialogo_editar_pago(pago_id, on_exito)
+
+
 def open_nuevo_lote_tres_arr(
     refresh: Callable[[], None], user: User | None = None
 ) -> None:

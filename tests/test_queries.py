@@ -29,7 +29,7 @@ from src.domain.dto.create import (
     ReclamoSosCreate,
     TresArrReclamoCreate,
 )
-from src.domain.dto.read import ReclamoHomeFilter
+from src.domain.dto.read import PagoListFilter, ReclamoHomeFilter
 from tests.fakes.unit_of_work import FakeUnitOfWork
 
 
@@ -365,3 +365,90 @@ def test_list_home_orden_fecha_desc() -> None:
     items = list_home(uow)
     assert [item.dominio for item in items] == ['AA100', 'BB200', 'CC300']
     assert items[-1].created_at is None
+
+
+def test_list_pagos_con_detalle_grupo() -> None:
+    uow = _dataset_filtros()
+    items = list_pagos_con_detalle(uow)
+    assert len(items) == 3
+    tresa = next(it for it in items if it.dominio == 'CD456EF')
+    assert tresa.grupo == 'GRUPO NORTE'
+    assert tresa.forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
+    sos_items = [it for it in items if it.dominio == 'AB123CD']
+    assert len(sos_items) == 2
+    assert all(it.grupo is None for it in sos_items)
+
+
+def test_list_pagos_filtro_pagador() -> None:
+    uow = _dataset_filtros()
+    items = list_pagos_con_detalle(uow, PagoListFilter(pagadores={AgenteEnum.SOS}))
+    assert len(items) == 2
+    assert {it.dominio for it in items} == {'AB123CD', 'CD456EF'}
+    assert all(it.pagador == AgenteEnum.SOS for it in items)
+    solo_asegurado = list_pagos_con_detalle(
+        uow, PagoListFilter(pagadores={AgenteEnum.ASEGURADO})
+    )
+    assert len(solo_asegurado) == 1
+    assert solo_asegurado[0].dominio == 'AB123CD'
+
+
+def test_list_pagos_filtro_destinatario() -> None:
+    uow = _dataset_filtros()
+    items = list_pagos_con_detalle(uow, PagoListFilter(destinatarios={AgenteEnum.SM}))
+    assert len(items) == 2
+    assert {it.dominio for it in items} == {'AB123CD', 'CD456EF'}
+    assert all(it.destinatario == AgenteEnum.SM for it in items)
+
+
+def test_list_pagos_filtro_forma() -> None:
+    uow = _dataset_filtros()
+    transferencias = list_pagos_con_detalle(
+        uow, PagoListFilter(formas={FormaPagoEnum.TRANSFERENCIA})
+    )
+    assert len(transferencias) == 1
+    assert transferencias[0].dominio == 'AB123CD'
+    ncs = list_pagos_con_detalle(
+        uow, PagoListFilter(formas={FormaPagoEnum.NOTA_DE_CREDITO})
+    )
+    assert len(ncs) == 2
+    assert {it.dominio for it in ncs} == {'AB123CD', 'CD456EF'}
+
+
+def test_list_pagos_filtro_texto() -> None:
+    uow = _dataset_filtros()
+    assert len(list_pagos_con_detalle(uow, PagoListFilter(texto='acme'))) == 2
+    assert len(list_pagos_con_detalle(uow, PagoListFilter(texto='P-00'))) == 3
+    assert len(list_pagos_con_detalle(uow, PagoListFilter(texto='grupo norte'))) == 1
+    assert len(list_pagos_con_detalle(uow, PagoListFilter(texto='cd45'))) == 1
+    assert list_pagos_con_detalle(uow, PagoListFilter(texto='noexiste')) == []
+
+
+def test_list_pagos_filtro_combinado() -> None:
+    uow = _dataset_filtros()
+    items = list_pagos_con_detalle(
+        uow,
+        PagoListFilter(
+            pagadores={AgenteEnum.SOS},
+            formas={FormaPagoEnum.NOTA_DE_CREDITO},
+            texto='cd45',
+        ),
+    )
+    assert len(items) == 1
+    assert items[0].dominio == 'CD456EF'
+
+
+def test_pago_list_filter_is_empty() -> None:
+    assert PagoListFilter().is_empty() is True
+    assert PagoListFilter(pagadores={AgenteEnum.SOS}).is_empty() is False
+    assert PagoListFilter(destinatarios={AgenteEnum.SM}).is_empty() is False
+    assert PagoListFilter(formas={FormaPagoEnum.EFECTIVO}).is_empty() is False
+    assert PagoListFilter(texto='x').is_empty() is False
+
+
+def test_list_pagos_filtro_sets_vacios_no_filtran() -> None:
+    uow = _dataset_filtros()
+    items = list_pagos_con_detalle(
+        uow,
+        PagoListFilter(pagadores=set(), destinatarios=set(), formas=set()),
+    )
+    assert len(items) == 3

@@ -6,6 +6,7 @@ from src.domain.domain_enums import FormaPagoEnum
 from src.domain.dto.read import (
     CicloCard,
     GrupoReclamoItem,
+    PagoListFilter,
     PagoListItem,
     ReclamoHomeFilter,
     ReclamoHomeItem,
@@ -174,7 +175,13 @@ class FakeUnitOfWork:
             )
         return items
 
-    def list_pagos_con_detalle(self) -> list[PagoListItem]:
+    def list_pagos_con_detalle(
+        self, filtro: PagoListFilter | None = None
+    ) -> list[PagoListItem]:
+        grupo_por_reclamo: dict[int, str] = {}
+        for tres in self.tres_arr._store.values():
+            if tres.reclamo_id is not None and tres.grupo is not None:
+                grupo_por_reclamo[tres.reclamo_id] = tres.grupo
         items: list[PagoListItem] = []
         for pago in self.pagos.list():
             assert pago.id is not None
@@ -198,9 +205,16 @@ class FakeUnitOfWork:
                     poliza=reclamo.poliza if reclamo is not None else None,
                     cliente=reclamo.cliente if reclamo is not None else None,
                     nro_gestion=sos.nro_gestion if sos is not None else None,
+                    grupo=(
+                        grupo_por_reclamo.get(pago.reclamo_id)
+                        if pago.reclamo_id is not None
+                        else None
+                    ),
                 )
             )
-        return items
+        if filtro is None or filtro.is_empty():
+            return items
+        return [item for item in items if filtro.matches(item)]
 
     def list_ciclos(self) -> list[CicloCard]:
         cards: list[CicloCard] = []
