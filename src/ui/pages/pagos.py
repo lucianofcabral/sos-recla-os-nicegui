@@ -100,27 +100,39 @@ def pagos(user: User) -> None:
             ui.card().classes('w-full'),
             ui.row().classes('gap-4 items-center flex-wrap'),
         ):
-            pagador = ui.select(
-                options=AGENTE_LABELS,
-                label='Pagador',
-                multiple=True,
-                with_input=True,
-                clearable=True,
-            ).props('outlined dense')
-            destinatario = ui.select(
-                options=AGENTE_LABELS,
-                label='Destinatario',
-                multiple=True,
-                with_input=True,
-                clearable=True,
-            ).props('outlined dense')
-            forma = ui.select(
-                options=FORMA_PAGO_LABELS,
-                label='Forma de Pago',
-                multiple=True,
-                with_input=True,
-                clearable=True,
-            ).props('outlined dense')
+            pagador = (
+                ui.select(
+                    options=AGENTE_LABELS,
+                    label='Pagador',
+                    multiple=True,
+                    with_input=True,
+                    clearable=True,
+                )
+                .props('outlined dense')
+                .style('min-width: 220px')
+            )
+            destinatario = (
+                ui.select(
+                    options=AGENTE_LABELS,
+                    label='Destinatario',
+                    multiple=True,
+                    with_input=True,
+                    clearable=True,
+                )
+                .props('outlined dense')
+                .style('min-width: 220px')
+            )
+            forma = (
+                ui.select(
+                    options=FORMA_PAGO_LABELS,
+                    label='Forma de Pago',
+                    multiple=True,
+                    with_input=True,
+                    clearable=True,
+                )
+                .props('outlined dense')
+                .style('min-width: 220px')
+            )
             texto = ui.input('Buscar (dominio, cliente, grupo, póliza)').props(
                 'outlined dense clearable :debounce="500"'
             )
@@ -175,6 +187,7 @@ def pagos(user: User) -> None:
             action_icon='edit',
             on_action=on_edit,
             classes='',
+            pagination=20,
         )
         row_action_button(
             table,

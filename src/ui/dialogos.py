@@ -236,16 +236,22 @@ def open_alta_reclamo(tipo: str, refresh: Callable[[], None]) -> None:
             ui.label('Pagos del reclamo').classes('text-subtitle1')
             with ui.row().classes('gap-2 w-full flex-wrap'):
                 fecha_pago = date_picker('Fecha de Pago', value=date.today())
-                forma_pago = ui.select(options=FORMA_PAGO_LABELS, label='Forma de Pago')
+                forma_pago = ui.select(
+                    options=FORMA_PAGO_LABELS, label='Forma de Pago'
+                ).style('min-width: 220px')
                 monto_pago = ui.number('Importe', format='%.2f', value=0).props(
                     'outlined'
                 )
-                pagador_pago = ui.select(options=AGENTE_LABELS, label='Pagador').props(
-                    'outlined'
+                pagador_pago = (
+                    ui.select(options=AGENTE_LABELS, label='Pagador')
+                    .props('outlined')
+                    .style('min-width: 220px')
                 )
-                destinatario_pago = ui.select(
-                    options=AGENTE_LABELS, label='Destinatario'
-                ).props('outlined')
+                destinatario_pago = (
+                    ui.select(options=AGENTE_LABELS, label='Destinatario')
+                    .props('outlined')
+                    .style('min-width: 220px')
+                )
             nota = ui.label('Nota de crédito: SOS paga a SM').classes('text-caption')
             nota.bind_visibility_from(
                 forma_pago, 'value', lambda v: v == FormaPagoEnum.NOTA_DE_CREDITO
@@ -720,11 +726,19 @@ def _dialogo_nuevo_pago(reclamo_id: int | None, on_exito: Callable[[], None]) ->
             ).classes('text-caption')
             reclamo = None
         fecha = date_picker('Fecha de Pago', value=date.today())
-        forma = ui.select(options=FORMA_PAGO_LABELS, label='Forma de Pago')
+        forma = ui.select(options=FORMA_PAGO_LABELS, label='Forma de Pago').style(
+            'min-width: 220px'
+        )
         monto = ui.number('Importe', format='%.2f', value=0).props('outlined')
-        pagador = ui.select(options=AGENTE_LABELS, label='Pagador').props('outlined')
-        destinatario = ui.select(options=AGENTE_LABELS, label='Destinatario').props(
-            'outlined'
+        pagador = (
+            ui.select(options=AGENTE_LABELS, label='Pagador')
+            .props('outlined')
+            .style('min-width: 220px')
+        )
+        destinatario = (
+            ui.select(options=AGENTE_LABELS, label='Destinatario')
+            .props('outlined')
+            .style('min-width: 220px')
         )
         nota = ui.label('Nota de crédito: SOS paga a SM').classes('text-caption')
         nota.bind_visibility_from(
@@ -781,14 +795,20 @@ def _dialogo_editar_pago(pago_id: int, on_exito: Callable[[], None]) -> None:
         fecha = date_picker('Fecha de Pago', value=pago.fecha_pago or date.today())
         forma = ui.select(
             options=FORMA_PAGO_LABELS, label='Forma de Pago', value=pago.forma_pago
-        )
+        ).style('min-width: 220px')
         monto = ui.number('Importe', format='%.2f', value=pago.monto).props('outlined')
-        pagador = ui.select(
-            options=AGENTE_LABELS, label='Pagador', value=pago.pagador
-        ).props('outlined')
-        destinatario = ui.select(
-            options=AGENTE_LABELS, label='Destinatario', value=pago.destinatario
-        ).props('outlined')
+        pagador = (
+            ui.select(options=AGENTE_LABELS, label='Pagador', value=pago.pagador)
+            .props('outlined')
+            .style('min-width: 220px')
+        )
+        destinatario = (
+            ui.select(
+                options=AGENTE_LABELS, label='Destinatario', value=pago.destinatario
+            )
+            .props('outlined')
+            .style('min-width: 220px')
+        )
         nota = ui.label('Nota de crédito: SOS paga a SM').classes('text-caption')
         nota.bind_visibility_from(
             forma, 'value', lambda v: v == FormaPagoEnum.NOTA_DE_CREDITO
