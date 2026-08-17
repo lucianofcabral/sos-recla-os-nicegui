@@ -18,7 +18,7 @@ from src.infrastructure.import_ledger import (
 )
 from src.infrastructure.unit_of_work import SqlModelUnitOfWork
 from src.ui.layout import page
-from src.ui.widgets import MAX_ERRORS_SHOWN, form_footer, modal
+from src.ui.widgets import MAX_ERRORS_SHOWN, error_label, form_footer, modal
 
 REPORT_LABELS: dict[str, str] = {
     'sos': 'Reclamos SOS',
@@ -161,9 +161,7 @@ def migracion(user: User) -> None:
             ui.card().classes('w-full'),
             ui.column().classes('gap-2 w-full'),
         ):
-            ui.label('No se pudo completar la importación').classes(
-                'text-negative text-h6'
-            )
+            error_label('No se pudo completar la importación').classes(add='text-h6')
             ui.code('\n'.join(errors))
 
     def _render_report(report: dict, apply: bool) -> None:
@@ -181,8 +179,8 @@ def migracion(user: User) -> None:
                     ui.label(str(report.get(key, 0))).classes('text-right')
             errores = report.get('errores', [])
             if errores:
-                ui.label(f'Errores: {len(errores)}').classes(
-                    'text-negative text-weight-medium'
+                error_label(f'Errores: {len(errores)}').classes(
+                    add='text-weight-medium'
                 )
                 shown = errores[:MAX_ERRORS_SHOWN]
                 ui.code('\n'.join(str(error) for error in shown))

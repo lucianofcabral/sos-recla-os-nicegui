@@ -1025,7 +1025,7 @@ def open_importar_sos(refresh: Callable[[], None]) -> None:
             return
         with errores_container:
             for mensaje in errores[:MAX_ERRORS_SHOWN]:
-                ui.label(mensaje).classes('text-negative text-caption')
+                error_label(mensaje).classes(add='text-caption')
             if len(errores) > MAX_ERRORS_SHOWN:
                 rest = len(errores) - MAX_ERRORS_SHOWN
                 ui.label(f'... y {rest} errores más.').classes('text-caption')
