@@ -6,6 +6,12 @@ import os
 
 from nicegui import ui
 
+# Import pages for their route-registration side effects.
+import src.ui.pages.home
+import src.ui.pages.login
+import src.ui.pages.migracion
+import src.ui.pages.pagos
+import src.ui.pages.periodos  # noqa: F401
 from src.infrastructure.database import build_engine, create_schema
 
 UI_HOST = os.getenv('UI_HOST', '127.0.0.1')

@@ -46,7 +46,11 @@
     },
     "general": {
       "mode": "subagent",
-      "model": "ollama/qwen2.5:3b"
+      "model": "opencode-go/mimo-v2.5-free"
+    },
+    "general-pro": {
+      "mode": "subagent",
+      "model": "opencode-go/mimo-v2.5"
     }
   }
 }
