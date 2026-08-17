@@ -48,6 +48,29 @@ class AsignarNotaCreditoAPeriodo:
             return nc
 
 
+class AsignarNotasCreditoAPeriodo:
+    """Assign an existing period to multiple credit notes in a single transaction."""
+
+    def __init__(self, uow: UnitOfWorkPort) -> None:
+        self._uow = uow
+
+    def __call__(self, credit_note_ids: list[int], periodo_id: int) -> list[CreditNote]:
+        with self._uow:
+            periodo = self._uow.periodos.get(periodo_id)
+            if periodo.cerrado:
+                raise DomainError(
+                    'no se puede asignar una nota de crédito a un periodo cerrado'
+                )
+            result: list[CreditNote] = []
+            for credit_note_id in credit_note_ids:
+                nc = self._uow.credit_notes.get(credit_note_id)
+                nc = nc.model_copy(update={'periodo_id': periodo_id})
+                nc = self._uow.credit_notes.update(nc)
+                result.append(nc)
+            self._uow.commit()
+            return result
+
+
 class DesasignarNotaCreditoAPeriodo:
     """Remove the period assignment from a credit note."""
 

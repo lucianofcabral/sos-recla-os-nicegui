@@ -6,6 +6,7 @@ import pytest
 
 from src.application.use_cases.nota_credito import (
     AsignarNotaCreditoAPeriodo,
+    AsignarNotasCreditoAPeriodo,
     DesasignarNotaCreditoAPeriodo,
     NotaCreditoBorrar,
 )
@@ -213,3 +214,34 @@ def test_desasignar_nc_sin_periodo_funciona() -> None:
         assert nc.id is not None
         desasignada = DesasignarNotaCreditoAPeriodo(uow)(nc.id)
         assert desasignada.periodo_id is None
+
+
+def test_asignar_varias_nc_a_periodo_abierto_funciona() -> None:
+    with FakeUnitOfWork() as uow:
+        r1 = _crear_reclamo(uow)
+        _crear_nc_pago(uow, r1)
+        r2 = _crear_reclamo(uow)
+        _crear_nc_pago(uow, r2)
+        periodo_id = _crear_periodo(uow)
+
+        nc1 = uow.credit_notes.get(1)
+        nc2 = uow.credit_notes.get(2)
+        assert nc1.id is not None and nc2.id is not None
+
+        asignadas = AsignarNotasCreditoAPeriodo(uow)([nc1.id, nc2.id], periodo_id)
+        assert len(asignadas) == 2
+        assert all(nc.periodo_id == periodo_id for nc in asignadas)
+        assert uow.credit_notes.get(nc1.id).periodo_id == periodo_id
+        assert uow.credit_notes.get(nc2.id).periodo_id == periodo_id
+
+
+def test_asignar_varias_nc_a_periodo_cerrado_raises_domain_error() -> None:
+    with FakeUnitOfWork() as uow:
+        r1 = _crear_reclamo(uow)
+        _crear_nc_pago(uow, r1)
+        nc1 = uow.credit_notes.get(1)
+        assert nc1.id is not None
+        periodo_id = _crear_periodo(uow, cerrado=True)
+
+        with pytest.raises(DomainError):
+            AsignarNotasCreditoAPeriodo(uow)([nc1.id], periodo_id)
