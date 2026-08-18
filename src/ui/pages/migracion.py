@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-import os
+import io
+import shutil
 import tempfile
-from contextlib import suppress
+import zipfile
+from pathlib import Path
 
 from nicegui import background_tasks, events, run, ui
 from sqlmodel import Session
@@ -48,12 +50,47 @@ def _migrate(old_path: str, apply: bool) -> dict:
     return report
 
 
-def _remove_file(path: str | None) -> None:
-    """Best-effort removal of a temp file, ignoring missing files."""
+def _remove_workspace(path: str | None) -> None:
+    """Best-effort removal of an uploaded migration workspace."""
     if path is None:
         return
-    with suppress(FileNotFoundError):
-        os.remove(path)
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def _safe_extract_zip(archive: zipfile.ZipFile, destination: Path) -> None:
+    """Extract a migration ZIP while rejecting path traversal entries."""
+    destination = destination.resolve()
+    for member in archive.infolist():
+        target = (destination / member.filename).resolve()
+        try:
+            target.relative_to(destination)
+        except ValueError as exc:
+            raise ValueError(
+                f'El ZIP contiene una ruta inválida: {member.filename}'
+            ) from exc
+    archive.extractall(destination)
+
+
+def _prepare_upload(filename: str, data: bytes) -> tuple[str, str]:
+    """Save a DB or migration ZIP and return ``(db_path, workspace)``."""
+    workspace = tempfile.mkdtemp(prefix='sos-migracion-')
+    try:
+        suffix = Path(filename).suffix.lower()
+        if suffix == '.db':
+            db_path = Path(workspace) / 'gestiones.db'
+            db_path.write_bytes(data)
+            return str(db_path), workspace
+        if suffix != '.zip':
+            raise ValueError('Seleccioná un archivo .db o un ZIP de migración')
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            _safe_extract_zip(archive, Path(workspace))
+        databases = list(Path(workspace).rglob('*.db'))
+        if len(databases) != 1:
+            raise ValueError('El ZIP debe contener exactamente una base .db')
+        return str(databases[0]), workspace
+    except Exception:
+        _remove_workspace(workspace)
+        raise
 
 
 @page('Migración', path='/migracion', admin_only=True)
@@ -63,17 +100,17 @@ def migracion(user: User) -> None:
         'Importar una base legada (SQLite) a la base actual. Solo administradores.'
     )
 
-    selected: dict[str, str | None] = {'path': None}
+    selected: dict[str, str | None] = {'path': None, 'workspace': None}
     apply_checkbox = ui.checkbox('Aplicar (escribir en la base)')
     ui.label(
         'Sin marcar, la importación es un dry run: solo cuenta y no escribe nada.'
     ).classes('text-caption text-grey-7')
 
     upload = ui.upload(
-        label='Seleccionar archivo .db',
+        label='Seleccionar archivo .db o ZIP de migración',
         auto_upload=True,
         on_upload=lambda e: _handle_upload(e),
-    ).props('accept=".db"')
+    ).props('accept=".db,.zip"')
 
     import_button = ui.button(
         'Importar',
@@ -95,13 +132,16 @@ def migracion(user: User) -> None:
 
     async def _handle_upload(e: events.UploadEventArguments) -> None:
         data = await e.file.read()
-        fd, tmp_path = tempfile.mkstemp(suffix='.db')
-        with os.fdopen(fd, 'wb') as handle:
-            handle.write(data)
-        old = selected['path']
-        selected['path'] = tmp_path
-        if old is not None:
-            _remove_file(old)
+        try:
+            db_path, workspace = _prepare_upload(e.file.name, data)
+        except (ValueError, zipfile.BadZipFile) as exc:
+            ui.notify(f'Archivo inválido: {exc}', type='negative')
+            e.sender.reset()
+            return
+        old_workspace = selected['workspace']
+        selected['path'] = db_path
+        selected['workspace'] = workspace
+        _remove_workspace(old_workspace)
         e.sender.reset()
         import_button.set_enabled(True)
         ui.notify(f'Archivo {e.file.name} seleccionado', type='positive')
@@ -140,8 +180,9 @@ def migracion(user: User) -> None:
             _render_errors([str(exc)])
             return
         finally:
-            _remove_file(selected['path'])
+            _remove_workspace(selected['workspace'])
             selected['path'] = None
+            selected['workspace'] = None
             upload.reset()
             _set_running(False)
         _render_report(report, apply)

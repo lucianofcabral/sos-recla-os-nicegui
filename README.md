@@ -66,4 +66,4 @@ docker compose -f docker-compose.prod.yml exec app python scripts/bootstrap.py -
 
 ## Especificación
 
-`PROMPT_INICIAL.md` es la especificación de producto autoritativa (páginas, campos y reglas de negocio). `MANUAL_DE_USUARIO.md` es el manual de usuario (casos de uso paso a paso).
+`PROMPT_INICIAL.md` es la especificación de producto autoritativa (páginas, campos y reglas de negocio). `MANUAL_DE_USUARIO.md` es el [manual de usuario](MANUAL_DE_USUARIO.md) con los casos de uso paso a paso.

@@ -82,6 +82,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error('--username es obligatorio (o definir BOOTSTRAP_USER)')
     if not args.password:
         parser.error('--password es obligatorio (o definir BOOTSTRAP_PASSWORD)')
+    if len(args.password) < MIN_PASSWORD_LENGTH:
+        print(
+            f'Error: La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres',
+            file=sys.stderr,
+        )
+        return 1
     role = ROLE_FLAGS[args.role]
     engine = build_engine()
     create_schema(engine)

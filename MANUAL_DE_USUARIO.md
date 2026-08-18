@@ -163,9 +163,24 @@ Tocá **Nuevo Periodo** y cargá **Año**, **Mes** y un **Nombre Corto** opciona
 
 ## 9. Migración (solo administradores)
 
-La página **Migración** importa una base legada (archivo SQLite `.db`) hacia la base actual:
+La página **Migración** importa una base legada hacia la base actual. Para migrar
+también los documentos adjuntos, prepará un ZIP con esta estructura:
 
-1. Seleccioná el archivo `.db`.
+```text
+migracion.zip
+├── gestiones.db
+└── files/
+    └── docs/
+        └── ...archivos referenciados por la base...
+```
+
+La carpeta `files/docs` debe quedar al mismo nivel que `gestiones.db` dentro del
+ZIP. También se puede subir sólo `gestiones.db`, pero en ese caso los documentos
+que dependan de archivos externos no se podrán importar.
+
+Desde la página:
+
+1. Seleccioná el ZIP de migración (o el archivo `.db` si no hay adjuntos).
 2. Sin marcar **Aplicar (escribir en la base)**, la importación es un **dry run**: solo cuenta y no escribe nada.
 3. Con **Aplicar** marcado, pide confirmación y escribe los cambios.
 4. Al final muestra el **reporte por tipo** (reclamos SOS, 3 Arroyos, Gestión, pagos, notas de crédito, facturas, periodos, documentos) y los errores si los hubo.
