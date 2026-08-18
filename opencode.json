@@ -21,6 +21,10 @@
     "general-pro": {
       "mode": "subagent",
       "model": "opencode-go/mimo-v2.5"
+    },
+    "explore": {
+      "mode": "subagent",
+      "model": "opencode-go/mimo-v2.5"
     }
   }
 }
