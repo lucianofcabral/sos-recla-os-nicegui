@@ -1,4 +1,5 @@
 from src.domain.dto.create import PeriodoCreate
+from src.domain.dto.edit import PeriodoEdit
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import Periodo
 from src.domain.ports.unit_of_work import UnitOfWorkPort
@@ -57,6 +58,25 @@ class PeriodoReabrir:
         with self._uow:
             periodo = self._uow.periodos.get(periodo_id)
             periodo = periodo.model_copy(update={'cerrado': False})
+            periodo = self._uow.periodos.update(periodo)
+            self._uow.commit()
+            return periodo
+
+
+class PeriodoActualizar:
+    """Update a billing period's date fields."""
+
+    def __init__(self, uow: UnitOfWorkPort) -> None:
+        self._uow = uow
+
+    def __call__(self, data: PeriodoEdit) -> Periodo:
+        with self._uow:
+            periodo = self._uow.periodos.get(data.id)
+            updates = {
+                'fecha_inicio': data.fecha_inicio,
+                'fecha_fin': data.fecha_fin,
+            }
+            periodo = periodo.model_copy(update=updates)
             periodo = self._uow.periodos.update(periodo)
             self._uow.commit()
             return periodo

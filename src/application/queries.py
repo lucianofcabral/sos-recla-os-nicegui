@@ -31,6 +31,12 @@ def list_ciclos(uow: QueryPort) -> list[CicloCard]:
     return uow.list_ciclos()
 
 
+def list_notas_credito_por_periodo(
+    uow: QueryPort, periodo_id: int
+) -> list[NotaCreditoSinAsignarItem]:
+    return uow.list_notas_credito_por_periodo(periodo_id)
+
+
 def list_notas_credito_sin_asignar(
     uow: QueryPort,
 ) -> list[NotaCreditoSinAsignarItem]:

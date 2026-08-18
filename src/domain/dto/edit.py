@@ -11,8 +11,9 @@ from src.domain.domain_enums import (
 
 
 class PeriodoEdit(BaseModel):
-    anio: int
-    mes: int
+    id: int
+    anio: int | None = None
+    mes: int | None = None
     anio_mes: int | None = None
     nombre_corto: str | None = None
     nombre_largo: str | None = None

@@ -14,39 +14,9 @@
     }
   },
   "agent": {
-    "ollama-explorer": {
-      "description": "Explora el codebase con un modelo local de Ollama. Solo lectura.",
-      "mode": "subagent",
-      "model": "ollama/qwen2.5:3b",
-      "permission": {
-        "edit": "deny",
-        "bash": "ask"
-      },
-      "prompt": "You are a codebase explorer. You map file structures, find patterns, and answer questions about the codebase. You read files and search with grep/glob. You never edit files. Report findings concisely."
-    },
-    "ollama-reviewer": {
-      "description": "Revisa código con un modelo local de Ollama. Solo lectura.",
-      "mode": "subagent",
-      "model": "ollama/qwen2.5:3b",
-      "permission": {
-        "edit": "deny",
-        "bash": "deny"
-      },
-      "prompt": "You are a code reviewer. You read diffs and source files, then report issues, style violations, and potential bugs. You never edit files. Be direct and specific."
-    },
-    "ollama-assistant": {
-      "description": "Asistente general con un modelo local de Ollama.",
-      "mode": "subagent",
-      "model": "ollama/llama3.2:3b",
-      "permission": {
-        "edit": "ask",
-        "bash": "ask"
-      },
-      "prompt": "You are a general-purpose coding assistant. You can read files, run commands, and make simple edits. Keep responses short and direct."
-    },
     "general": {
       "mode": "subagent",
-      "model": "opencode-go/mimo-v2.5-free"
+      "model": "opencode-go/mimo-v2.5"
     },
     "general-pro": {
       "mode": "subagent",

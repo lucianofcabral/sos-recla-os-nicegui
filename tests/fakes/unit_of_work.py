@@ -247,6 +247,43 @@ class FakeUnitOfWork:
             return self.pagos.get(credit_note.pago_id).monto or 0.0
         return 0.0
 
+    def list_notas_credito_por_periodo(
+        self, periodo_id: int
+    ) -> list[NotaCreditoSinAsignarItem]:
+        items: list[NotaCreditoSinAsignarItem] = []
+        for nc in self.credit_notes._store.values():
+            if nc.periodo_id != periodo_id:
+                continue
+            assert nc.id is not None
+            pago = self.pagos.get(nc.pago_id) if nc.pago_id is not None else None
+            reclamo = (
+                self.reclamos.get(pago.reclamo_id)
+                if pago is not None and pago.reclamo_id is not None
+                else None
+            )
+            nro_gestion = None
+            if pago is not None and pago.reclamo_id is not None:
+                sos = self.reclamos_sos.get_by_reclamo_id(pago.reclamo_id)
+                if sos is not None:
+                    nro_gestion = sos.nro_gestion
+            items.append(
+                NotaCreditoSinAsignarItem(
+                    credit_note_id=nc.id,
+                    pago_id=nc.pago_id,
+                    monto=pago.monto if pago is not None else None,
+                    fecha_pago=pago.fecha_pago if pago is not None else None,
+                    dominio=reclamo.dominio if reclamo is not None else None,
+                    cliente=reclamo.cliente if reclamo is not None else None,
+                    poliza=reclamo.poliza if reclamo is not None else None,
+                    nro_gestion=nro_gestion,
+                )
+            )
+        items.sort(
+            key=lambda item: item.fecha_pago or date.min,
+            reverse=True,
+        )
+        return items
+
     def list_notas_credito_sin_asignar(self) -> list[NotaCreditoSinAsignarItem]:
         items: list[NotaCreditoSinAsignarItem] = []
         for nc in self.credit_notes._store.values():

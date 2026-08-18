@@ -302,6 +302,71 @@ class SqlModelUnitOfWork:
                 result[periodo_id] = (int(cant), float(suma))
         return result
 
+    def list_notas_credito_por_periodo(
+        self, periodo_id: int
+    ) -> list[NotaCreditoSinAsignarItem]:
+        """Credit notes assigned to a specific period, with pago + reclamo detail."""
+        nc_rows = self._session.exec(
+            select(CreditNoteRow).where(CreditNoteRow.periodo_id == periodo_id)
+        ).all()
+        if not nc_rows:
+            return []
+        pago_ids = [nc.pago_id for nc in nc_rows if nc.pago_id is not None]
+        reclamo_ids: set[int] = set()
+        pagos: dict[int, PagoRow] = {}
+        if pago_ids:
+            for pago in self._session.exec(
+                select(PagoRow).where(PagoRow.id.in_(pago_ids))
+            ).all():
+                if pago.id is not None:
+                    pagos[pago.id] = pago
+                    if pago.reclamo_id is not None:
+                        reclamo_ids.add(pago.reclamo_id)
+        nro_por_reclamo: dict[int, int] = {}
+        if reclamo_ids:
+            for sos in self._session.exec(
+                select(ReclamoSosRow).where(ReclamoSosRow.reclamo_id.in_(reclamo_ids))
+            ).all():
+                if sos.reclamo_id is not None:
+                    nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
+        reclamos: dict[int, ReclamoRow] = {}
+        if reclamo_ids:
+            for reclamo in self._session.exec(
+                select(ReclamoRow).where(ReclamoRow.id.in_(reclamo_ids))
+            ).all():
+                if reclamo.id is not None:
+                    reclamos[reclamo.id] = reclamo
+        items: list[NotaCreditoSinAsignarItem] = []
+        for nc in nc_rows:
+            assert nc.id is not None
+            pago = pagos.get(nc.pago_id) if nc.pago_id is not None else None
+            reclamo = (
+                reclamos.get(pago.reclamo_id)
+                if pago is not None and pago.reclamo_id is not None
+                else None
+            )
+            items.append(
+                NotaCreditoSinAsignarItem(
+                    credit_note_id=nc.id,
+                    pago_id=nc.pago_id,
+                    monto=pago.monto if pago is not None else None,
+                    fecha_pago=pago.fecha_pago if pago is not None else None,
+                    dominio=reclamo.dominio if reclamo is not None else None,
+                    cliente=reclamo.cliente if reclamo is not None else None,
+                    poliza=reclamo.poliza if reclamo is not None else None,
+                    nro_gestion=(
+                        nro_por_reclamo.get(pago.reclamo_id)
+                        if pago is not None and pago.reclamo_id is not None
+                        else None
+                    ),
+                )
+            )
+        items.sort(
+            key=lambda item: item.fecha_pago or date.min,
+            reverse=True,
+        )
+        return items
+
     def list_notas_credito_sin_asignar(self) -> list[NotaCreditoSinAsignarItem]:
         """Credit notes with no period, joined with pago and reclamo detail."""
         nc_rows = self._session.exec(
