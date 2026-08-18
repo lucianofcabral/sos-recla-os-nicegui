@@ -484,3 +484,102 @@ def test_entidad_documento_save_list_y_unique(session: Session) -> None:
                 entidad_id=1,
             )
         )
+
+
+def test_documento_list_by_entidad_y_delete(session: Session) -> None:
+    repo = SqlModelDocumentoRepository(session)
+    vinculos = SqlModelEntidadDocumentoRepository(session)
+    doc1 = repo.save(
+        Documento(
+            document_hash='a' * 64,
+            tipo='adjunto',
+            nombre='uno.pdf',
+            contenido=b'one',
+            tamanio=3,
+            mime='application/pdf',
+        )
+    )
+    doc2 = repo.save(
+        Documento(
+            document_hash='b' * 64,
+            tipo='adjunto',
+            nombre='dos.pdf',
+            contenido=b'two',
+            tamanio=3,
+            mime='application/pdf',
+        )
+    )
+    vinculos.save(
+        EntidadDocumento(
+            document_hash=doc1.document_hash,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    vinculos.save(
+        EntidadDocumento(
+            document_hash=doc2.document_hash,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    vinculos.save(
+        EntidadDocumento(
+            document_hash=doc2.document_hash,
+            tipo_entidad=TipoEntidadEnum.PERIODO,
+            entidad_id=3,
+        )
+    )
+    assert sorted(d.document_hash for d in repo.list_by_entidad('RECLAMO', 10)) == [
+        'a' * 64,
+        'b' * 64,
+    ]
+    assert repo.list_by_entidad('PERIODO', 3) == [doc2]
+    assert repo.list_by_entidad('PERIODO', 999) == []
+    repo.delete_by_hash('a' * 64)
+    assert repo.get_by_hash('a' * 64) is None
+    assert repo.get_by_hash('b' * 64) is not None
+
+
+def test_entidad_documento_delete_y_counts(session: Session) -> None:
+    repo = SqlModelEntidadDocumentoRepository(session)
+    repo.save(
+        EntidadDocumento(
+            document_hash='a' * 64,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    repo.save(
+        EntidadDocumento(
+            document_hash='b' * 64,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    repo.save(
+        EntidadDocumento(
+            document_hash='b' * 64,
+            tipo_entidad=TipoEntidadEnum.PERIODO,
+            entidad_id=3,
+        )
+    )
+    assert repo.count_by_entidad('RECLAMO', 10) == 2
+    assert repo.count_by_entidad('PERIODO', 3) == 1
+    assert repo.count_by_entidad('RECLAMO', 999) == 0
+    assert repo.count_by_hash('b' * 64) == 2
+    assert repo.count_by_hash('f' * 64) == 0
+    assert repo.delete_by_entidad('RECLAMO', 10, 'a' * 64) is True
+    assert repo.delete_by_entidad('RECLAMO', 10, 'a' * 64) is False
+    assert repo.count_by_entidad('RECLAMO', 10) == 1
+    assert repo.count_by_entidad('PERIODO', 3) == 1
+    assert repo.delete_by_entidad('RECLAMO', 10, 'b' * 64) is True
+    assert repo.count_by_entidad('RECLAMO', 10) == 0
+    assert repo.count_by_entidad('PERIODO', 3) == 1
+    assert repo.list_by_entidad('RECLAMO', 10) == []
+    assert sorted(
+        (v.document_hash, v.tipo_entidad.value, v.entidad_id)
+        for v in repo.list_by_entidad('PERIODO', 3)
+    ) == [
+        ('b' * 64, TipoEntidadEnum.PERIODO.value, 3),
+    ]

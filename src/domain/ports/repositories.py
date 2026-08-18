@@ -165,9 +165,27 @@ class DocumentoRepositoryPort(Protocol):
 
     def get_by_hash(self, document_hash: str) -> Documento | None: ...
 
+    def list_by_entidad(
+        self, tipo_entidad: str, entidad_id: int
+    ) -> list[Documento]: ...
+
+    def delete_by_hash(self, document_hash: str) -> bool: ...
+
 
 @runtime_checkable
 class EntidadDocumentoRepositoryPort(Protocol):
     """Puerto del repositorio de vínculos entre documentos y entidades."""
 
     def save(self, entidad: EntidadDocumento) -> EntidadDocumento: ...
+
+    def list_by_entidad(
+        self, tipo_entidad: str, entidad_id: int
+    ) -> list[EntidadDocumento]: ...
+
+    def delete_by_entidad(
+        self, tipo_entidad: str, entidad_id: int, document_hash: str
+    ) -> bool: ...
+
+    def count_by_entidad(self, tipo_entidad: str, entidad_id: int) -> int: ...
+
+    def count_by_hash(self, document_hash: str) -> int: ...

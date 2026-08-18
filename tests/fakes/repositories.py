@@ -280,8 +280,11 @@ class FakeDocumentoRepository:
     dict keyed by ``document_hash``.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self, entidad_documentos: FakeEntidadDocumentoRepository | None = None
+    ) -> None:
         self._store: dict[str, Documento] = {}
+        self._entidad_documentos = entidad_documentos
 
     def get_by_hash(self, document_hash: str) -> Documento | None:
         return self._store.get(document_hash)
@@ -296,6 +299,19 @@ class FakeDocumentoRepository:
 
     def list(self) -> list[Documento]:
         return list(self._store.values())
+
+    def list_by_entidad(self, tipo_entidad: str, entidad_id: int) -> list[Documento]:
+        if self._entidad_documentos is None:
+            return list(self._store.values())
+        vinculos = self._entidad_documentos.list_by_entidad(tipo_entidad, entidad_id)
+        hashes = {v.document_hash for v in vinculos}
+        return [self._store[h] for h in hashes if h in self._store]
+
+    def delete_by_hash(self, document_hash: str) -> bool:
+        if document_hash in self._store:
+            del self._store[document_hash]
+            return True
+        return False
 
 
 class FakeEntidadDocumentoRepository:
@@ -317,6 +333,34 @@ class FakeEntidadDocumentoRepository:
 
     def list(self) -> list[EntidadDocumento]:
         return list(self._store.values())
+
+    def list_by_entidad(
+        self, tipo_entidad: str, entidad_id: int
+    ) -> list[EntidadDocumento]:
+        return [
+            v
+            for v in self._store.values()
+            if (
+                v.tipo_entidad is not None
+                and v.tipo_entidad.value == tipo_entidad
+                and v.entidad_id == entidad_id
+            )
+        ]
+
+    def delete_by_entidad(
+        self, tipo_entidad: str, entidad_id: int, document_hash: str
+    ) -> bool:
+        key = (document_hash, tipo_entidad, entidad_id)
+        if key in self._store:
+            del self._store[key]
+            return True
+        return False
+
+    def count_by_entidad(self, tipo_entidad: str, entidad_id: int) -> int:
+        return len(self.list_by_entidad(tipo_entidad, entidad_id))
+
+    def count_by_hash(self, document_hash: str) -> int:
+        return sum(1 for v in self._store.values() if v.document_hash == document_hash)
 
     @staticmethod
     def _key(entidad: EntidadDocumento) -> tuple[str, str, int]:

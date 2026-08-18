@@ -20,7 +20,12 @@ from src.application.use_cases.reclamo import (
     SosReclamoNuevo,
     TresArrReclamoNuevo,
 )
-from src.domain.domain_enums import AgenteEnum, FormaPagoEnum, TipoReclamoEnum
+from src.domain.domain_enums import (
+    AgenteEnum,
+    FormaPagoEnum,
+    TipoEntidadEnum,
+    TipoReclamoEnum,
+)
 from src.domain.dto.create import (
     FacturaCreate,
     OtrosReclamoCreate,
@@ -31,6 +36,7 @@ from src.domain.dto.create import (
     TresArrReclamoCreate,
 )
 from src.domain.dto.read import PagoListFilter, ReclamoHomeFilter
+from src.domain.models.entities import Documento, EntidadDocumento
 from tests.fakes.unit_of_work import FakeUnitOfWork
 
 
@@ -142,6 +148,50 @@ def test_list_ciclos() -> None:
     assert card.cant_notas_credito == 1
     assert card.suma_importe_notas_credito == 5000.0
     assert card.cerrado is False
+
+
+def test_list_ciclos_cuenta_documentos() -> None:
+    uow = _dataset()
+    periodo = uow.periodos.list()[0]
+    assert periodo.id is not None
+    doc1 = uow.documentos.save(
+        Documento(
+            document_hash='a' * 64,
+            tipo='adjunto',
+            nombre='uno.pdf',
+            contenido=b'one',
+            tamanio=3,
+            mime='application/pdf',
+        )
+    )
+    doc2 = uow.documentos.save(
+        Documento(
+            document_hash='b' * 64,
+            tipo='adjunto',
+            nombre='dos.pdf',
+            contenido=b'two',
+            tamanio=3,
+            mime='application/pdf',
+        )
+    )
+    uow.entidad_documentos.save(
+        EntidadDocumento(
+            document_hash=doc1.document_hash,
+            tipo_entidad=TipoEntidadEnum.PERIODO,
+            entidad_id=periodo.id,
+        )
+    )
+    uow.entidad_documentos.save(
+        EntidadDocumento(
+            document_hash=doc2.document_hash,
+            tipo_entidad=TipoEntidadEnum.PERIODO,
+            entidad_id=periodo.id,
+        )
+    )
+    cards = list_ciclos(uow)
+    assert len(cards) == 1
+    assert cards[0].cant_documentos == 2
+    assert cards[0].suma_importe_facturas == 3000.5
 
 
 def test_list_ciclos_propaga_cerrado() -> None:

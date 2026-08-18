@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
@@ -432,6 +433,30 @@ class SqlModelDocumentoRepository:
         rows = self._session.exec(select(DocumentoRow).order_by(DocumentoRow.id)).all()
         return [row.to_entity() for row in rows]
 
+    def list_by_entidad(self, tipo_entidad: str, entidad_id: int) -> list[Documento]:
+        stmt = (
+            select(DocumentoRow)
+            .join(
+                EntidadDocumentoRow,
+                DocumentoRow.document_hash == EntidadDocumentoRow.document_hash,
+            )
+            .where(EntidadDocumentoRow.tipo_entidad == tipo_entidad)
+            .where(EntidadDocumentoRow.entidad_id == entidad_id)
+            .order_by(desc(DocumentoRow.creado))
+        )
+        rows = self._session.exec(stmt).all()
+        return [row.to_entity() for row in rows]
+
+    def delete_by_hash(self, document_hash: str) -> bool:
+        row = self._session.exec(
+            select(DocumentoRow).where(DocumentoRow.document_hash == document_hash)
+        ).first()
+        if row is None:
+            return False
+        self._session.delete(row)
+        self._session.flush()
+        return True
+
 
 class SqlModelEntidadDocumentoRepository:
     """SQLModel-backed implementation of EntidadDocumentoRepositoryPort."""
@@ -450,3 +475,50 @@ class SqlModelEntidadDocumentoRepository:
             select(EntidadDocumentoRow).order_by(EntidadDocumentoRow.id)
         ).all()
         return [row.to_entity() for row in rows]
+
+    def list_by_entidad(
+        self, tipo_entidad: str, entidad_id: int
+    ) -> list[EntidadDocumento]:
+        stmt = (
+            select(EntidadDocumentoRow)
+            .where(EntidadDocumentoRow.tipo_entidad == tipo_entidad)
+            .where(EntidadDocumentoRow.entidad_id == entidad_id)
+            .order_by(EntidadDocumentoRow.id)
+        )
+        rows = self._session.exec(stmt).all()
+        return [row.to_entity() for row in rows]
+
+    def delete_by_entidad(
+        self, tipo_entidad: str, entidad_id: int, document_hash: str
+    ) -> bool:
+        row = self._session.exec(
+            select(EntidadDocumentoRow)
+            .where(EntidadDocumentoRow.tipo_entidad == tipo_entidad)
+            .where(EntidadDocumentoRow.entidad_id == entidad_id)
+            .where(EntidadDocumentoRow.document_hash == document_hash)
+        ).first()
+        if row is None:
+            return False
+        self._session.delete(row)
+        self._session.flush()
+        return True
+
+    def count_by_entidad(self, tipo_entidad: str, entidad_id: int) -> int:
+        from sqlalchemy import func
+
+        result = self._session.exec(
+            select(func.count(EntidadDocumentoRow.id))
+            .where(EntidadDocumentoRow.tipo_entidad == tipo_entidad)
+            .where(EntidadDocumentoRow.entidad_id == entidad_id)
+        ).one()
+        return int(result)
+
+    def count_by_hash(self, document_hash: str) -> int:
+        from sqlalchemy import func
+
+        result = self._session.exec(
+            select(func.count(EntidadDocumentoRow.id)).where(
+                EntidadDocumentoRow.document_hash == document_hash
+            )
+        ).one()
+        return int(result)

@@ -22,11 +22,12 @@ from src.application.use_cases.periodo import (
     PeriodoCerrar,
     PeriodoReabrir,
 )
+from src.domain.domain_enums import TipoEntidadEnum
 from src.domain.dto.edit import PeriodoEdit
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import User
 from src.ui.deps import uow_per_request
-from src.ui.dialogos import open_nuevo_ciclo
+from src.ui.dialogos import open_nuevo_ciclo, seccion_documentos
 from src.ui.layout import page
 from src.ui.widgets import date_picker, error_label, form_footer, modal
 
@@ -380,6 +381,8 @@ def periodos(user: User) -> None:
                             _confirm_cerrar(periodo_id),
                         ),
                     ).props('flat color=negative')
+
+            seccion_documentos(TipoEntidadEnum.PERIODO, periodo_id)
 
             def _guardar_fechas() -> None:
                 err.set_text('')

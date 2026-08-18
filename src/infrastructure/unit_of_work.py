@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 
 from src.adapters.sqlmodel.models import (
     CreditNoteRow,
+    EntidadDocumentoRow,
     FacturaRow,
     GrupoRow,
     PagoRow,
@@ -31,7 +32,7 @@ from src.adapters.sqlmodel.repositories import (
     SqlModelTresArrRepository,
     SqlModelUserRepository,
 )
-from src.domain.domain_enums import FormaPagoEnum
+from src.domain.domain_enums import FormaPagoEnum, TipoEntidadEnum
 from src.domain.dto.read import (
     CicloCard,
     GrupoReclamoItem,
@@ -249,6 +250,7 @@ class SqlModelUnitOfWork:
         """Cycle cards with SUM/COUNT aggregates grouped by periodo."""
         facturas_por_periodo = self._factura_totales_por_periodo()
         credit_notes_por_periodo = self._credit_note_totales_por_periodo()
+        documentos_por_periodo = self._documento_totales_por_periodo()
         cards: list[CicloCard] = []
         for periodo in self.periodos.list():
             periodo_id = periodo.id
@@ -262,7 +264,7 @@ class SqlModelUnitOfWork:
                     periodo_id=periodo_id,
                     nombre_corto=periodo.nombre_corto,
                     anio_mes=periodo.anio_mes,
-                    cant_documentos=0,
+                    cant_documentos=documentos_por_periodo.get(periodo_id, 0),
                     suma_importe_facturas=suma_facturas,
                     cant_notas_credito=cant_ncs,
                     suma_importe_notas_credito=suma_ncs,
@@ -270,6 +272,21 @@ class SqlModelUnitOfWork:
                 )
             )
         return cards
+
+    def _documento_totales_por_periodo(self) -> dict[int, int]:
+        rows = self._session.exec(
+            select(
+                EntidadDocumentoRow.entidad_id,
+                func.count(EntidadDocumentoRow.id),
+            )
+            .where(EntidadDocumentoRow.tipo_entidad == TipoEntidadEnum.PERIODO.value)
+            .group_by(EntidadDocumentoRow.entidad_id)
+        ).all()
+        result: dict[int, int] = {}
+        for entidad_id, cant in rows:
+            if entidad_id is not None:
+                result[entidad_id] = int(cant)
+        return result
 
     def _factura_totales_por_periodo(self) -> dict[int, tuple[int, float]]:
         rows = self._session.exec(

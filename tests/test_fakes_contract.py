@@ -1,7 +1,15 @@
 import pytest
 
+from src.domain.domain_enums import TipoEntidadEnum
 from src.domain.exceptions import DuplicateEntityError, EntityNotFoundError
-from src.domain.models.entities import Grupo, Reclamo, ReclamoSos, User
+from src.domain.models.entities import (
+    Documento,
+    EntidadDocumento,
+    Grupo,
+    Reclamo,
+    ReclamoSos,
+    User,
+)
 from src.domain.ports.queries import QueryPort
 from src.domain.ports.repositories import (
     CreditNoteRepositoryPort,
@@ -120,3 +128,97 @@ def test_fake_unit_of_work_exposes_repos_and_commits() -> None:
 
 def test_fake_unit_of_work_implements_query_port() -> None:
     assert isinstance(FakeUnitOfWork(), QueryPort)
+
+
+def test_fake_documento_list_by_entidad_y_delete() -> None:
+    vinculos = FakeEntidadDocumentoRepository()
+    repo = FakeDocumentoRepository(vinculos)
+    doc1 = repo.save(
+        Documento(
+            document_hash='a' * 64,
+            tipo='adjunto',
+            nombre='uno.pdf',
+            contenido=b'one',
+            tamanio=3,
+            mime='application/pdf',
+        )
+    )
+    doc2 = repo.save(
+        Documento(
+            document_hash='b' * 64,
+            tipo='adjunto',
+            nombre='dos.pdf',
+            contenido=b'two',
+            tamanio=3,
+            mime='application/pdf',
+        )
+    )
+    vinculos.save(
+        EntidadDocumento(
+            document_hash=doc1.document_hash,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    vinculos.save(
+        EntidadDocumento(
+            document_hash=doc2.document_hash,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    vinculos.save(
+        EntidadDocumento(
+            document_hash=doc2.document_hash,
+            tipo_entidad=TipoEntidadEnum.PERIODO,
+            entidad_id=3,
+        )
+    )
+    assert {d.document_hash for d in repo.list_by_entidad('RECLAMO', 10)} == {
+        'a' * 64,
+        'b' * 64,
+    }
+    assert repo.list_by_entidad('PERIODO', 3) == [doc2]
+    assert repo.list_by_entidad('PERIODO', 999) == []
+    assert repo.delete_by_hash('a' * 64) is True
+    assert repo.delete_by_hash('a' * 64) is False
+    assert repo.get_by_hash('a' * 64) is None
+    assert repo.get_by_hash('b' * 64) is not None
+
+
+def test_fake_entidad_documento_delete_y_counts() -> None:
+    repo = FakeEntidadDocumentoRepository()
+    repo.save(
+        EntidadDocumento(
+            document_hash='a' * 64,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    repo.save(
+        EntidadDocumento(
+            document_hash='b' * 64,
+            tipo_entidad=TipoEntidadEnum.RECLAMO,
+            entidad_id=10,
+        )
+    )
+    repo.save(
+        EntidadDocumento(
+            document_hash='b' * 64,
+            tipo_entidad=TipoEntidadEnum.PERIODO,
+            entidad_id=3,
+        )
+    )
+    assert repo.count_by_entidad('RECLAMO', 10) == 2
+    assert repo.count_by_entidad('PERIODO', 3) == 1
+    assert repo.count_by_entidad('RECLAMO', 999) == 0
+    assert repo.count_by_hash('b' * 64) == 2
+    assert repo.count_by_hash('f' * 64) == 0
+    assert repo.delete_by_entidad('RECLAMO', 10, 'a' * 64) is True
+    assert repo.delete_by_entidad('RECLAMO', 10, 'a' * 64) is False
+    assert repo.count_by_entidad('RECLAMO', 10) == 1
+    assert repo.count_by_entidad('PERIODO', 3) == 1
+    assert repo.delete_by_entidad('RECLAMO', 10, 'b' * 64) is True
+    assert repo.count_by_entidad('RECLAMO', 10) == 0
+    assert repo.count_by_entidad('PERIODO', 3) == 1
+    assert repo.list_by_entidad('RECLAMO', 10) == []

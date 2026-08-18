@@ -39,3 +39,9 @@ def test_ui_run_guarded_by_main_guard() -> None:
     run_index = main_source.index('ui.run(')
     assert guard_index < start_call_index
     assert run_index < start_call_index
+
+
+def test_dialogos_exports_document_section() -> None:
+    import src.ui.dialogos
+
+    assert callable(src.ui.dialogos.seccion_documentos)

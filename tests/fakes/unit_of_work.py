@@ -55,8 +55,8 @@ class FakeUnitOfWork:
         self.facturas = FakeFacturaRepository()
         self.credit_notes = FakeCreditNoteRepository()
         self.users = FakeUserRepository()
-        self.documentos = FakeDocumentoRepository()
         self.entidad_documentos = FakeEntidadDocumentoRepository()
+        self.documentos = FakeDocumentoRepository(self.entidad_documentos)
         self.committed = False
         self._snapshot()
 
@@ -229,7 +229,9 @@ class FakeUnitOfWork:
                     periodo_id=periodo_id,
                     nombre_corto=periodo.nombre_corto,
                     anio_mes=periodo.anio_mes,
-                    cant_documentos=0,
+                    cant_documentos=self.entidad_documentos.count_by_entidad(
+                        'PERIODO', periodo_id
+                    ),
                     suma_importe_facturas=sum(f.importe for f in facturas),
                     cant_notas_credito=len(credit_notes),
                     suma_importe_notas_credito=sum(

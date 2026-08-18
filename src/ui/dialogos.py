@@ -15,6 +15,11 @@ from src.application.import_excel_sos import (
     ImportExcelSosReport,
     importar_excel_sos,
 )
+from src.application.use_cases.documento import (
+    DocumentoAdjuntar,
+    DocumentoEliminar,
+    DocumentoListarPorEntidad,
+)
 from src.application.use_cases.lote import LoteTresArrNuevo
 from src.application.use_cases.pago import PagoActualizar, PagoNuevo
 from src.application.use_cases.periodo import PeriodoNuevo
@@ -28,7 +33,12 @@ from src.application.use_cases.reclamo import (
     TresArrReclamoActualizar,
     TresArrReclamoNuevo,
 )
-from src.domain.domain_enums import AgenteEnum, FormaPagoEnum, TipoReclamoEnum
+from src.domain.domain_enums import (
+    AgenteEnum,
+    FormaPagoEnum,
+    TipoEntidadEnum,
+    TipoReclamoEnum,
+)
 from src.domain.dto.create import (
     DocumentoCreate,
     GestionLoteItem,
@@ -49,7 +59,7 @@ from src.domain.dto.edit import (
 )
 from src.domain.dto.read import GrupoReclamoItem
 from src.domain.exceptions import DomainError
-from src.domain.models.entities import Pago, User
+from src.domain.models.entities import Documento, Pago, User
 from src.ui.deps import uow_per_request
 from src.ui.labels import AGENTE_LABELS, FORMA_PAGO_LABELS, TIPO_ENUM, TIPO_LABELS
 from src.ui.widgets import (
@@ -76,6 +86,90 @@ def _validation_text(exc: ValidationError) -> str:
 
 def _file_hash(contenido: bytes) -> str:
     return hashlib.sha256(contenido).hexdigest()
+
+
+def seccion_documentos(tipo_entidad: TipoEntidadEnum, entidad_id: int) -> None:
+    """Render the documents section: upload area + list with download/delete.
+
+    Uses the document use cases against ``tipo_entidad``/``entidad_id``
+    (RECLAMO or PERIODO) and re-renders the list after each mutation.
+    """
+
+    docs_container = ui.column().classes('gap-1 w-full')
+
+    def _render() -> None:
+        docs_container.clear()
+        with uow_per_request() as uow:
+            docs = DocumentoListarPorEntidad(uow)(tipo_entidad, entidad_id)
+        if not docs:
+            with docs_container:
+                ui.label('Sin documentos adjuntos').classes('text-caption')
+            return
+        with docs_container:
+            for doc in docs:
+                with ui.row().classes('items-center w-full gap-2'):
+                    ui.label(doc.nombre).classes('flex-1').tooltip(
+                        f'{doc.mime} · {doc.tamanio} bytes'
+                    )
+                    ui.button(
+                        icon='download',
+                        on_click=lambda d=doc: _descargar(d),
+                    ).props('flat dense color=primary')
+                    ui.button(
+                        icon='delete',
+                        on_click=lambda d=doc: _confirmar_borrar(d),
+                    ).props('flat dense color=negative')
+
+    async def _on_upload(e: events.UploadEventArguments) -> None:
+        contenido = await e.file.read()
+        data = DocumentoCreate(
+            document_hash=_file_hash(contenido),
+            tipo='adjunto',
+            nombre=e.file.name,
+            contenido=contenido,
+            tamanio=len(contenido),
+            mime=e.file.content_type or '',
+        )
+        try:
+            with uow_per_request() as uow:
+                DocumentoAdjuntar(uow)(tipo_entidad, entidad_id, data)
+        except DomainError as exc:
+            ui.notify(str(exc), type='negative')
+            return
+        ui.notify(f'Documento "{e.file.name}" adjuntado', type='positive')
+        _render()
+
+    def _descargar(doc: Documento) -> None:
+        ui.download(doc.contenido or b'', filename=doc.nombre)
+
+    def _confirmar_borrar(doc: Documento) -> None:
+        with modal('Eliminar documento') as dialog:
+            ui.label(f'¿Eliminar "{doc.nombre}"? Esta acción no se puede deshacer.')
+            form_footer(
+                dialog,
+                on_save=lambda: _borrar(doc, dialog),
+                save_label='Eliminar',
+            )
+        dialog.open()
+
+    def _borrar(doc: Documento, dialog) -> None:
+        with uow_per_request() as uow:
+            DocumentoEliminar(uow)(tipo_entidad, entidad_id, doc.document_hash)
+        dialog.close()
+        ui.notify(f'Documento "{doc.nombre}" eliminado', type='positive')
+        _render()
+
+    # El upload se mantiene siempre visible para adjuntar sin pasos extra.
+    ui.upload(
+        label='Adjuntar documentos',
+        auto_upload=True,
+        multiple=True,
+        on_upload=_on_upload,
+    ).props('accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"')
+
+    with ui.row().classes('justify-between w-full items-center'):
+        ui.label('Documentos').classes('text-subtitle2')
+    _render()
 
 
 def _crear_reclamo(tipo: str, values: dict[str, Any]) -> None:
@@ -500,6 +594,8 @@ def open_editar_reclamo(
             _dialogo_editar_pago(pago_id, _render_pagos)
 
         _render_pagos()
+
+        seccion_documentos(TipoEntidadEnum.RECLAMO, reclamo_id)
 
         def guardar() -> None:
             error.set_text('')
