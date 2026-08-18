@@ -1,0 +1,37 @@
+# Stack de producción para Portainer.
+# Requiere que la imagen esté publicada en un registry (docker compose build + docker push).
+#   docker compose -f docker-compose.prod.yml build
+#   docker compose -f docker-compose.prod.yml push
+# En Portainer: New stack -> copiar este archivo y definir STORAGE_SECRET (y opcional IMAGE).
+services:
+  app:
+    image: ${IMAGE:-sos-reclamos-nicegui:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-sos}:${POSTGRES_PASSWORD:-sos}@db:5432/${POSTGRES_DB:-sos_reclamos}
+      STORAGE_SECRET: ${STORAGE_SECRET:?Definí STORAGE_SECRET en el stack (variable de entorno) para firmar las sesiones}
+      UI_HOST: 0.0.0.0
+      UI_PORT: '8081'
+    ports:
+      - '${UI_PORT:-8081}:8081'
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sos}
+      POSTGRES_DB: ${POSTGRES_DB:-sos_reclamos}
+    volumes:
+      - sos_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-sos} -d ${POSTGRES_DB:-sos_reclamos}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  sos_pgdata:

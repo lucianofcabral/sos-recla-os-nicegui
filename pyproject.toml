@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "sos-reclamos-nicegui"
 version = "0.1.0"
@@ -8,11 +12,14 @@ dependencies = [
     "bcrypt>=5.0.0",
     "nicegui>=3.16.0",
     "openpyxl>=3.1.5",
-    "psycopg>=3.3.4",
+    "psycopg[binary]>=3.3.4",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
     "sqlmodel>=0.0.39",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [dependency-groups]
 dev = [
