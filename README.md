@@ -1,6 +1,8 @@
 # SOS Reclamos — NiceGUI
 
-Aplicación web para la gestión de reclamos, pagos, notas de crédito y periodos de SOS, construida con Python 3.13, NiceGUI y una arquitectura hexagonal (domain / application / adapters / infrastructure / ui).
+Aplicación web para la gestión de reclamos, pagos, notas de crédito, periodos y documentos adjuntos de SOS, construida con Python 3.13, NiceGUI y una arquitectura hexagonal (domain / application / adapters / infrastructure / ui).
+
+El **manual de usuario** con el paso a paso de cada caso de uso está en [`MANUAL_DE_USUARIO.md`](MANUAL_DE_USUARIO.md).
 
 ## Requisitos
 
@@ -30,7 +32,7 @@ uv run python -m src.ui.main
 ## Tests y lint
 
 ```sh
-uv run pytest       # 108 tests (app, repos, UoW; integración Postgres vía testcontainers si hay Docker)
+uv run pytest       # 252 tests (app, repos, UoW; integración Postgres vía testcontainers si hay Docker)
 uv run ruff check .
 uv run ruff format .
 ```
@@ -64,4 +66,4 @@ docker compose -f docker-compose.prod.yml exec app python scripts/bootstrap.py -
 
 ## Especificación
 
-`PROMPT_INICIAL.md` es la especificación de producto autoritativa (páginas, campos y reglas de negocio).
+`PROMPT_INICIAL.md` es la especificación de producto autoritativa (páginas, campos y reglas de negocio). `MANUAL_DE_USUARIO.md` es el manual de usuario (casos de uso paso a paso).
