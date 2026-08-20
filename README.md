@@ -4,6 +4,8 @@ Aplicación web para la gestión de reclamos, pagos, notas de crédito, periodos
 
 El **manual de usuario** con el paso a paso de cada caso de uso está en [`MANUAL_DE_USUARIO.md`](MANUAL_DE_USUARIO.md).
 
+El **manual de despliegue** (Portainer, `.env`, actualización y respaldo) está en [`MANUAL_DE_DEPLOY.md`](MANUAL_DE_DEPLOY.md).
+
 ## Requisitos
 
 - Python 3.13
@@ -51,12 +53,13 @@ La imagen expone el puerto 8081 y arranca con `python -m src.ui.main`. Requiere 
 
 ### Deploy en Portainer
 
-`docker-compose.prod.yml` define el stack completo (app + Postgres). En Portainer: **New stack** → pegar el contenido (o apuntar al archivo) → definir al menos `STORAGE_SECRET` y `IMAGE` (el nombre de tu imagen publicada):
+`docker-compose.prod.yml` define el stack completo (app + Postgres). Las variables van en un `.env`:
 
-```yaml
-IMAGE=hub/sos-reclamos-nicegui:latest
-STORAGE_SECRET=una-clave-secreta-larga
+```sh
+cp .env.example .env   # ajustá los valores (IMAGE apunta a tu imagen publicada)
 ```
+
+En Portainer: **New stack** → pegar el contenido de `docker-compose.prod.yml` → pegar el contenido de `.env` en **Environment variables** (modo avanzado, o definir las vars una a una). Variables mínimas: `IMAGE` (tu imagen publicada) y `STORAGE_SECRET`.
 
 Primer arranque: la app crea el esquema sola; creá el usuario admin con:
 

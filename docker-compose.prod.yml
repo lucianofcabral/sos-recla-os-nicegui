@@ -2,7 +2,10 @@
 # Requiere que la imagen esté publicada en un registry (docker compose build + docker push).
 #   docker compose -f docker-compose.prod.yml build
 #   docker compose -f docker-compose.prod.yml push
-# En Portainer: New stack -> copiar este archivo y definir STORAGE_SECRET (y opcional IMAGE).
+# Las variables salen de .env (copiá .env.example y ajustá):
+#   cp .env.example .env
+# En Portainer: New stack -> pegar este archivo + el contenido de .env en
+#   Environment variables (IMAGE y STORAGE_SECRET son obligatorias).
 services:
   app:
     image: ${IMAGE:-sos-reclamos-nicegui:latest}
