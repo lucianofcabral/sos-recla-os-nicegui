@@ -84,9 +84,11 @@ def _prepare_upload(filename: str, data: bytes) -> tuple[str, str]:
             raise ValueError('Seleccioná un archivo .db o un ZIP de migración')
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             _safe_extract_zip(archive, Path(workspace))
-        databases = list(Path(workspace).rglob('*.db'))
+        # La base legada vive en la raíz del ZIP; los adjuntos (files/docs) pueden
+        # tener cualquier extensión (incluso .db), así que no se busca recursivo.
+        databases = list(Path(workspace).glob('*.db'))
         if len(databases) != 1:
-            raise ValueError('El ZIP debe contener exactamente una base .db')
+            raise ValueError('El ZIP debe contener exactamente una base .db en su raíz')
         return str(databases[0]), workspace
     except Exception:
         _remove_workspace(workspace)
