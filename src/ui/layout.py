@@ -55,11 +55,9 @@ def render_shell(title: str, user: User) -> None:
                 tab.on('click', lambda p=nav_item.path: ui.navigate.to(p))
         ui.space()
         theme_button = ui.button(icon='dark_mode').props('flat round text-white')
-        theme_button.tooltip('Cambiar a tema claro/oscuro')
+        theme_button.tooltip('Cambiar a tema claro/oscuro').classes('text-white q-ml-lg')
         theme_button.on('click', toggle_theme)
-        logout_button = ui.button('Cerrar Sesión', icon='logout').props(
-            'flat text-white'
-        )
+        logout_button = ui.button('Cerrar Sesión', icon='logout').classes('text-white q-ml-lg')
         logout_button.tooltip('Cerrar la sesión actual')
         logout_button.on('click', logout)
 
