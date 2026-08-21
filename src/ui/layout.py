@@ -9,6 +9,7 @@ from nicegui import app, ui
 
 from src.domain.models.entities import User
 from src.ui.deps import THEME_KEY, is_admin, require_login
+from src.ui.theme import apply_theme
 
 
 class NavItem(NamedTuple):
@@ -30,6 +31,7 @@ NAV_ITEMS: tuple[NavItem, ...] = (
 
 def render_shell(title: str, user: User) -> None:
     """Apply the user preferences and render the shared application header."""
+    apply_theme()
     dark_mode = ui.dark_mode(bool(app.storage.user.get(THEME_KEY, True)))
 
     def toggle_theme() -> None:
@@ -42,10 +44,10 @@ def render_shell(title: str, user: User) -> None:
         ui.navigate.to('/login')
 
     with (
-        ui.header().classes('bg-primary text-white').props('elevated'),
+        ui.header().classes('text-white').props('elevated'),
         ui.row().classes('items-center w-full q-px-md'),
     ):
-        ui.icon('support_agent').classes('text-h4')
+        ui.icon('🆘').classes('text-h4')
         ui.label('SOS Reclamos').classes('text-h6 q-ml-sm text-weight-medium')
         with ui.tabs(value=title).classes('text-white q-ml-lg'):
             for nav_item in NAV_ITEMS:

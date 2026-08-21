@@ -7,6 +7,7 @@ from nicegui import app, ui
 from src.application.use_cases.register_user import AutenticarUsuario
 from src.domain.exceptions import DomainError
 from src.ui.deps import CURRENT_USER_KEY, get_current_user, uow_per_request
+from src.ui.theme import apply_theme
 
 INVALID_CREDENTIALS = 'usuario o contraseña inválidos'
 
@@ -24,6 +25,7 @@ def _try_login(username: str, password: str) -> bool:
 
 @ui.page('/login')
 def login() -> None:
+    apply_theme()
     ui.dark_mode(True)
     if get_current_user() is not None:
         ui.navigate.to('/')
@@ -33,7 +35,7 @@ def login() -> None:
         ui.card().classes('w-full'),
         ui.column().classes('gap-4 q-pa-md'),
     ):
-        ui.icon('support_agent').classes('text-h4')
+        ui.icon('🆘').classes('text-h4')
         ui.label('SOS Reclamos').classes('text-h5')
         username = ui.input('Usuario').props('outlined')
         password = ui.input(

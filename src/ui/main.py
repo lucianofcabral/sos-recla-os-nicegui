@@ -28,6 +28,7 @@ def start() -> None:
         title='SOS Reclamos',
         language='es',
         dark=True,
+        favicon='favicon.svg',
         storage_secret=STORAGE_SECRET,
         reload=False,
     )
