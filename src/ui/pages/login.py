@@ -18,7 +18,7 @@ def _try_login(username: str, password: str) -> bool:
     except DomainError:
         ui.notify(INVALID_CREDENTIALS, type='negative', close_button=True)
         return False
-    app.storage.user[CURRENT_USER_KEY] = user
+    app.storage.user[CURRENT_USER_KEY] = user.model_dump(mode='json')
     return True
 
 

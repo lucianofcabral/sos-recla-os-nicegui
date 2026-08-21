@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import cast
 
 from nicegui import app, ui
 from sqlalchemy.orm import sessionmaker
@@ -41,8 +40,18 @@ def uow_per_request() -> Iterator[SqlModelUnitOfWork]:
 
 
 def get_current_user() -> User | None:
-    """Return the logged-in user stored in the session, or None."""
-    return cast(User | None, app.storage.user.get(CURRENT_USER_KEY))
+    """Return the logged-in user stored in the session, or None.
+
+    The user is persisted as a JSON-serializable dict (via model_dump(mode='json'))
+    because NiceGUI's storage requires JSON-compatible values. Older sessions may
+    still hold a raw User object in memory, so we tolerate that shape too.
+    """
+    data = app.storage.user.get(CURRENT_USER_KEY)
+    if data is None:
+        return None
+    if isinstance(data, User):
+        return data
+    return User.model_validate(data)
 
 
 def require_login() -> User | None:
