@@ -1,0 +1,99 @@
+schema: spec-driven
+
+context: |
+  Tech stack: Python 3.14 runtime (requires-python >=3.13); NiceGUI >=3.16 (Python-native UI, no JS framework); SQLModel 2 / SQLAlchemy 2 with psycopg 3; pydantic 2; bcrypt; openpyxl; python-dotenv. Package manager: uv (uv.lock, hatchling backend).
+  Architecture: Hexagonal (ports & adapters). src/domain holds frozen pydantic entities, ports, DTOs, enums and exceptions; src/application holds use cases (UnitOfWorkPort, explicit commit), read-model queries and import/export; src/adapters/sqlmodel holds XxxRow models and repositories that flush but never commit; src/infrastructure holds SqlModelUnitOfWork and engine/schema; src/ui holds NiceGUI pages.
+  Persistence: DATABASE_URL (postgresql+psycopg://...) with SQLite fallback sqlite:///sos.db.
+  Migrations: SQLModel.metadata.create_all only; there is no Alembic and no migration folder.
+  Product spec: PROMPT_INICIAL.md is the authoritative product specification (Spanish). Read the relevant sections before adding features.
+  Business rules: see .opencode/skills/sos-context/SKILL.md (nro_gestion mandatory for SOS, NC auto-creation, OTROS as flat rows, Argentine money format).
+  Style: ruff, 88 columns, single quotes, E501 ignored; lint set E,W,F,I,N,UP,B,C4,SIM,RUF; explicit commit boundary lives in use cases.
+  Testing: uv run pytest -q (263 tests, green) with unit fakes + SQLite, testcontainers Postgres integration, and headless NiceGUI UI tests.
+  Deploy: Dockerfile + docker-compose.yml + docker-compose.prod.yml (Portainer); manual: MANUAL_DE_DEPLOY.md.
+
+projects:
+  - path: .
+    stack: Python 3.14 / NiceGUI / SQLModel / PostgreSQL
+    test_command: uv run pytest -q
+    test_framework: pytest
+    test_layers:
+      - unit
+      - integration
+      - ui
+    coverage_command: null
+    lint_command: uv run ruff check .
+    format_command: uv run ruff format .
+    type_check_command: null
+
+strict_tdd: true
+
+testing:
+  detected: 2026-09-14
+  strict_tdd: true
+  rationale: >
+    Single in-scope project discovered at the workspace root. One explicit
+    workspace-level test command (uv run pytest -q) covers every in-scope
+    project, so Strict TDD defaults to true. Integration tests are gated by a
+    Docker availability check and skip when Docker is absent.
+  projects:
+    - path: .
+      stack: Python 3.14 / NiceGUI / SQLModel
+      test_command: uv run pytest -q
+      framework: pytest
+      layers:
+        unit:
+          available: true
+          tool: pytest with in-memory fakes (tests/fakes) plus SQLite-backed repo/query/UoW tests
+        integration:
+          available: true
+          tool: testcontainers postgres:16-alpine (skipped when Docker is unavailable)
+        ui:
+          available: true
+          tool: headless NiceGUI render tests (tests/test_ui_*.py)
+        e2e:
+          available: false
+          tool: null
+      coverage:
+        available: false
+        command: null
+      quality:
+        linter:
+          available: true
+          command: uv run ruff check .
+        type_checker:
+          available: false
+          command: null
+        formatter:
+          available: true
+          command: uv run ruff format .
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - State which hexagonal layer(s) the change touches (domain, application, adapters, infrastructure, ui)
+    - Reference PROMPT_INICIAL.md sections when the change alters product behavior
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+    - Keep business rules consistent with .opencode/skills/sos-context/SKILL.md
+  design:
+    - Document architecture decisions with rationale
+    - Keep domain free of ORM/framework imports; depend on ports, not adapters
+    - Document the commit boundary (use cases commit explicitly; repositories only flush)
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+    - Add a task for tests whenever behavior changes
+  apply:
+    guidelines:
+      - Follow existing code patterns (single quotes, 88 cols, type hints on signatures)
+      - Load .opencode/skills/sos-context/SKILL.md before touching domain/UI/import
+      - Run selective tests with -q; use tests/ui tests for UI changes
+    tdd: true
+    test_command: uv run pytest -q
+  verify:
+    test_command: uv run pytest -q
+    build_command: uv run ruff check .
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas
