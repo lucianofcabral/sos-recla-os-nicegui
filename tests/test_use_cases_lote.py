@@ -4,6 +4,7 @@ import hashlib
 
 import pytest
 
+from src.application.use_cases.documento import DocumentoListarPorEntidad
 from src.application.use_cases.lote import LoteTresArrNuevo
 from src.domain.domain_enums import (
     AgenteEnum,
@@ -93,8 +94,8 @@ def test_lote_crea_grupo_gestiones_pagos_y_documentos() -> None:
 
         entidades = uow.entidad_documentos.list()
         assert len(entidades) == 1
-        assert entidades[0].tipo_entidad == TipoEntidadEnum.GRUPO
-        assert entidades[0].entidad_id == grupo.id
+        assert entidades[0].tipo_entidad == TipoEntidadEnum.RECLAMO
+        assert entidades[0].entidad_id == reclamos[0].id
 
 
 def test_lote_rechaza_grupo_existente() -> None:
@@ -170,3 +171,143 @@ def test_lote_sin_pagos_cuando_generar_pagos_false() -> None:
         grupo = uow.grupos.get_by_nombre('LOTE SIN PAGOS')
         assert grupo is not None
         assert all(t.grupo_id == grupo.id for t in tres_arr)
+
+
+def test_lote_create_acepta_documentos_de_grupo() -> None:
+    """LoteTresArrCreate carries group-level documents separately."""
+    doc = _documento('grupo.pdf', b'grupo-bytes')
+    data = LoteTresArrCreate(
+        grupo='Lote DTO',
+        documentos=[doc],
+        gestiones=[GestionLoteItem(reclamo=_reclamo_data())],
+    )
+    assert data.documentos == [doc]
+
+
+def test_lote_documento_de_grupo_vincula_grupo_y_cada_reclamo() -> None:
+    """A group document links to the GRUPO and to every gestión's reclamo."""
+    with FakeUnitOfWork() as uow:
+        data = LoteTresArrCreate(
+            grupo='Lote Grupo Doc',
+            documentos=[_documento('grupo.pdf', b'grupo-bytes')],
+            gestiones=[
+                GestionLoteItem(reclamo=_reclamo_data(dominio='AA111AA')),
+                GestionLoteItem(reclamo=_reclamo_data(dominio='BB222BB')),
+                GestionLoteItem(reclamo=_reclamo_data(dominio='CC333CC')),
+            ],
+        )
+        result = LoteTresArrNuevo(uow)(data)
+
+        grupo = uow.grupos.get_by_nombre('LOTE GRUPO DOC')
+        assert grupo is not None
+        assert grupo.id is not None
+        docs_grupo = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.GRUPO, grupo.id)
+        assert [d.nombre for d in docs_grupo] == ['grupo.pdf']
+
+        reclamos = list(uow.reclamos._store.values())
+        assert len(reclamos) == 3
+        for reclamo in reclamos:
+            assert reclamo.id is not None
+            docs = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.RECLAMO, reclamo.id)
+            assert [d.nombre for d in docs] == ['grupo.pdf']
+
+        assert len(uow.documentos.list()) == 1
+        assert len(uow.entidad_documentos.list()) == 4
+        assert result.documentos_adjuntados == 1
+        assert uow.committed is True
+
+
+def test_lote_documento_compartido_entre_gestiones_crea_un_documento_y_dos_vinculos() -> (
+    None
+):
+    """Same content in two gestiones: one Documento row, one link per reclamo."""
+    compartido = _documento('compartido.pdf', b'contenido-compartido')
+    with FakeUnitOfWork() as uow:
+        data = LoteTresArrCreate(
+            grupo='Lote Compartido',
+            gestiones=[
+                GestionLoteItem(
+                    reclamo=_reclamo_data(dominio='AA111AA'),
+                    documentos=[compartido],
+                ),
+                GestionLoteItem(
+                    reclamo=_reclamo_data(dominio='BB222BB'),
+                    documentos=[compartido],
+                ),
+            ],
+        )
+        result = LoteTresArrNuevo(uow)(data)
+
+        assert len(uow.documentos.list()) == 1
+        vinculos = uow.entidad_documentos.list()
+        assert len(vinculos) == 2
+        assert {v.tipo_entidad for v in vinculos} == {TipoEntidadEnum.RECLAMO}
+        reclamos = list(uow.reclamos._store.values())
+        assert {v.entidad_id for v in vinculos} == {r.id for r in reclamos}
+        assert result.documentos_adjuntados == 1
+        assert uow.committed is True
+
+
+def test_lote_documento_por_gestion_solo_visible_en_su_reclamo() -> None:
+    """A per-gestión document is not visible on the GRUPO or other gestiones."""
+    with FakeUnitOfWork() as uow:
+        data = LoteTresArrCreate(
+            grupo='Lote Aislado',
+            gestiones=[
+                GestionLoteItem(
+                    reclamo=_reclamo_data(dominio='AA111AA'),
+                    documentos=[_documento('a.pdf', b'bytes-a')],
+                ),
+                GestionLoteItem(
+                    reclamo=_reclamo_data(dominio='BB222BB'),
+                    documentos=[_documento('b.pdf', b'bytes-b')],
+                ),
+            ],
+        )
+        LoteTresArrNuevo(uow)(data)
+
+        grupo = uow.grupos.get_by_nombre('LOTE AISLADO')
+        assert grupo is not None
+        assert grupo.id is not None
+        reclamos = sorted(uow.reclamos._store.values(), key=lambda r: r.id or 0)
+        reclamo_a, reclamo_b = reclamos
+        assert reclamo_a.id is not None
+        assert reclamo_b.id is not None
+
+        docs_a = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.RECLAMO, reclamo_a.id)
+        docs_b = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.RECLAMO, reclamo_b.id)
+        assert [d.nombre for d in docs_a] == ['a.pdf']
+        assert [d.nombre for d in docs_b] == ['b.pdf']
+        assert DocumentoListarPorEntidad(uow)(TipoEntidadEnum.GRUPO, grupo.id) == []
+
+
+def test_lote_mezcla_documento_de_grupo_y_por_gestion() -> None:
+    """Group and per-gestión documents coexist with the right visibility."""
+    with FakeUnitOfWork() as uow:
+        data = LoteTresArrCreate(
+            grupo='Lote Mixto',
+            documentos=[_documento('grupo.pdf', b'g')],
+            gestiones=[
+                GestionLoteItem(
+                    reclamo=_reclamo_data(dominio='AA111AA'),
+                    documentos=[_documento('gestion.pdf', b'x')],
+                ),
+            ],
+        )
+        result = LoteTresArrNuevo(uow)(data)
+
+        grupo = uow.grupos.get_by_nombre('LOTE MIXTO')
+        assert grupo is not None
+        assert grupo.id is not None
+        reclamo = next(iter(uow.reclamos._store.values()))
+        assert reclamo.id is not None
+
+        docs_grupo = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.GRUPO, grupo.id)
+        docs_reclamo = DocumentoListarPorEntidad(uow)(
+            TipoEntidadEnum.RECLAMO, reclamo.id
+        )
+        assert [d.nombre for d in docs_grupo] == ['grupo.pdf']
+        assert {d.nombre for d in docs_reclamo} == {'grupo.pdf', 'gestion.pdf'}
+        assert len(uow.documentos.list()) == 2
+        assert len(uow.entidad_documentos.list()) == 3
+        assert result.documentos_adjuntados == 2

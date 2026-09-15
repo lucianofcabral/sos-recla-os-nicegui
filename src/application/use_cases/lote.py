@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 
+from src.application.use_cases.documento import adjuntar_documento
 from src.domain.domain_enums import (
     AgenteEnum,
     FormaPagoEnum,
@@ -12,8 +13,6 @@ from src.domain.dto.create import LoteTresArrCreate
 from src.domain.dto.read import LoteTresArrResult
 from src.domain.exceptions import DomainError
 from src.domain.models.entities import (
-    Documento,
-    EntidadDocumento,
     Grupo,
     Pago,
     Reclamo,
@@ -28,9 +27,10 @@ class LoteTresArrNuevo:
 
     The whole lot is saved under one ``with self._uow`` block and committed
     once at the end: on failure the context manager rolls back everything.
-    Documents are linked to the ``Grupo`` (not to individual reclamos) and a
-    single transfer payment SM -> Prestador is created per gestión whose
-    ``importe_reclamado`` is greater than zero.
+    Per-gestión documents are linked only to their reclamo; group-level
+    documents (``data.documentos``) are linked to the ``Grupo`` and to every
+    reclamo created in the lot. A single transfer payment SM -> Prestador is
+    created per gestión whose ``importe_reclamado`` is greater than zero.
     """
 
     def __init__(self, uow: UnitOfWorkPort) -> None:
@@ -57,7 +57,8 @@ class LoteTresArrNuevo:
 
             pagos_creados = 0
             gestiones_sin_pago = 0
-            documentos_adjuntados = 0
+            reclamo_ids: list[int] = []
+            hashes_adjuntados: set[str] = set()
             for item in data.gestiones:
                 reclamo = Reclamo(
                     tipo_reclamo=TipoReclamoEnum.TRESA,
@@ -70,6 +71,7 @@ class LoteTresArrNuevo:
                 )
                 reclamo = self._uow.reclamos.save(reclamo)
                 assert reclamo.id is not None
+                reclamo_ids.append(reclamo.id)
                 self._uow.tres_arr.save(
                     TresArrReclamo(
                         reclamo_id=reclamo.id,
@@ -79,26 +81,10 @@ class LoteTresArrNuevo:
                     )
                 )
                 for documento in item.documentos:
-                    contenido = documento.contenido or b''
-                    self._uow.documentos.save(
-                        Documento(
-                            document_hash=documento.document_hash,
-                            tipo=documento.tipo,
-                            nombre=documento.nombre,
-                            contenido=contenido,
-                            tamanio=documento.tamanio,
-                            mime=documento.mime,
-                            descripcion=documento.descripcion,
-                        )
+                    adjuntar_documento(
+                        self._uow, TipoEntidadEnum.RECLAMO, reclamo.id, documento
                     )
-                    self._uow.entidad_documentos.save(
-                        EntidadDocumento(
-                            document_hash=documento.document_hash,
-                            tipo_entidad=TipoEntidadEnum.GRUPO,
-                            entidad_id=grupo.id,
-                        )
-                    )
-                    documentos_adjuntados += 1
+                    hashes_adjuntados.add(documento.document_hash)
                 if data.generar_pagos and (item.reclamo.importe_reclamado or 0.0) > 0:
                     self._uow.pagos.save(
                         Pago(
@@ -114,12 +100,22 @@ class LoteTresArrNuevo:
                 else:
                     gestiones_sin_pago += 1
 
+            for documento in data.documentos:
+                adjuntar_documento(
+                    self._uow, TipoEntidadEnum.GRUPO, grupo.id, documento
+                )
+                for reclamo_id in reclamo_ids:
+                    adjuntar_documento(
+                        self._uow, TipoEntidadEnum.RECLAMO, reclamo_id, documento
+                    )
+                hashes_adjuntados.add(documento.document_hash)
+
             self._uow.commit()
             return LoteTresArrResult(
                 grupo_id=grupo.id,
                 grupo=grupo_nombre,
                 gestiones_creadas=len(data.gestiones),
                 pagos_creados=pagos_creados,
-                documentos_adjuntados=documentos_adjuntados,
+                documentos_adjuntados=len(hashes_adjuntados),
                 gestiones_sin_pago=gestiones_sin_pago,
             )
