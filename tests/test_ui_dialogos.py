@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
+from typing import Any
+
+from nicegui.client import Client
+from nicegui.testing.user_simulation import user_simulation
 
 from src.domain.domain_enums import AgenteEnum, FormaPagoEnum
 from src.domain.dto.edit import PagoEdit
@@ -58,3 +63,51 @@ def test_pago_edit_payload_accepts_date_object() -> None:
         fecha_pago=date(2024, 5, 2),
     )
     assert edit.fecha_pago == date(2024, 5, 2)
+
+
+def test_upsert_gestion_agrega_al_final_cuando_no_hay_seleccion() -> None:
+    """Without a selected index the pending gestión is appended."""
+    gestiones: list[dict[str, Any]] = []
+    idx = dialogos._upsert_gestion(gestiones, None, {'cliente': 'A'})
+    assert idx == 0
+    assert gestiones == [{'cliente': 'A'}]
+
+
+def test_upsert_gestion_actualiza_en_sitio_sin_duplicar() -> None:
+    """Selecting a pending gestión updates that row, never adds a new one."""
+    gestiones: list[dict[str, Any]] = [{'cliente': 'A'}, {'cliente': 'B'}]
+    idx = dialogos._upsert_gestion(gestiones, 1, {'cliente': 'B2'})
+    assert idx == 1
+    assert len(gestiones) == 2
+    assert gestiones[0] == {'cliente': 'A'}
+    assert gestiones[1] == {'cliente': 'B2'}
+
+
+def test_contar_documentos_distintos_dedupea_por_hash() -> None:
+    """Two files with the same bytes count as one distinct document."""
+    archivos = [
+        {'nombre': 'a.pdf', 'contenido': b'igual'},
+        {'nombre': 'a-copia.pdf', 'contenido': b'igual'},
+        {'nombre': 'b.pdf', 'contenido': b'distinto'},
+    ]
+    assert dialogos._contar_documentos_distintos(archivos) == 2
+
+
+def test_contar_documentos_distintos_vacio() -> None:
+    assert dialogos._contar_documentos_distintos([]) == 0
+
+
+def test_lote_dialogo_expone_cargas_separadas() -> None:
+    """The lote dialog has a group-level upload and a per-gestión upload."""
+
+    def root() -> None:
+        dialogos.open_nuevo_lote_tres_arr(lambda: None)
+
+    async def _correr() -> None:
+        async with user_simulation(root=root) as user:
+            await user.open('/')
+            await user.should_see('Documentos del grupo')
+            await user.should_see('Documentos de la gestión')
+
+    asyncio.run(_correr())
+    Client.instances.clear()

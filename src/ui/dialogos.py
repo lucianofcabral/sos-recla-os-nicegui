@@ -626,7 +626,7 @@ def open_editar_reclamo(
 
 
 def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
-    """Open the group dialog: rename group + gestiones listing with pagos."""
+    """Open the group dialog: rename, gestiones with pagos, and group documents."""
     with uow_per_request() as uow:
         grupo = uow.grupos.get(grupo_id)
         items: list[GrupoReclamoItem] = uow.list_grupo_detalle(grupo_id)
@@ -782,6 +782,9 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
 
         gestiones_container = ui.column().classes('gap-1 w-full')
         pagos_container = ui.column().classes('gap-1 w-full')
+
+        ui.label('Documentos del grupo').classes('text-subtitle2')
+        seccion_documentos(TipoEntidadEnum.GRUPO, grupo_id)
 
         form_footer(dialog, on_save=None, cancel_label='Cerrar')
 
@@ -960,16 +963,49 @@ def open_editar_pago(pago_id: int, on_exito: Callable[[], None]) -> None:
     _dialogo_editar_pago(pago_id, on_exito)
 
 
+def _upsert_gestion(
+    gestiones: list[dict[str, Any]], idx: int | None, values: dict[str, Any]
+) -> int:
+    """Insert or replace a pending gestión, returning its resulting index.
+
+    ``idx=None`` appends a new gestión; a valid existing index updates that
+    row in place so selecting a pending gestión never creates a duplicate.
+    """
+    if idx is None:
+        gestiones.append(values)
+        return len(gestiones) - 1
+    gestiones[idx] = values
+    return idx
+
+
+def _contar_documentos_distintos(archivos: list[dict[str, Any]]) -> int:
+    """Number of distinct documents by content hash (duplicates collapse)."""
+    return len({_file_hash(archivo['contenido']) for archivo in archivos})
+
+
 def open_nuevo_lote_tres_arr(
     refresh: Callable[[], None], user: User | None = None
 ) -> None:
-    """Open the batch dialog for Tres Arroyos lots (grupo + gestiones)."""
+    """Open the batch dialog for Tres Arroyos lots (grupo + gestiones + docs).
+
+    Group-level documents upload into ``archivos_grupo`` and feed
+    ``LoteTresArrCreate.documentos``; per-gestión documents upload into
+    ``archivos`` and attach to the gestión being added. Selecting a pending
+    row loads its fields into the form so saving updates it in place.
+    """
     gestiones: list[dict[str, Any]] = []
     archivos: list[dict[str, Any]] = []
+    archivos_grupo: list[dict[str, Any]] = []
+    selected_idx: int | None = None
     generar_pagos: ui.checkbox | None = None
 
     def _render_pendientes() -> None:
         pending_container.clear()
+        grupo_docs_container.clear()
+        with grupo_docs_container:
+            ui.label(
+                f'Documentos del grupo: {_contar_documentos_distintos(archivos_grupo)}'
+            ).classes('text-caption text-grey-7')
         if not gestiones:
             with pending_container:
                 ui.label('Sin gestiones cargadas').classes('text-caption')
@@ -1006,36 +1042,70 @@ def open_nuevo_lote_tres_arr(
                         'dominio': gest['dominio'] or '—',
                         'poliza': gest['poliza'] or '—',
                         'importe': format_money(gest['importe']),
-                        'documentos': len(gest['documentos']),
+                        'documentos': _contar_documentos_distintos(gest['documentos']),
                     }
                     for idx, gest in enumerate(gestiones)
                 ],
                 row_key='idx',
             ).classes('w-full')
+            table.on(
+                'row-click',
+                _on_row_clicked,
+                js_handler='(evt, row, index) => emit(row)',
+            )
             row_action_button(
                 table,
                 'quitar',
                 'delete',
-                make_remove_handler(gestiones, _render_pendientes),
+                _quitar_gestion,
+                event='click.stop',
             )
 
+    def _on_row_clicked(e: events.GenericEventArguments) -> None:
+        nonlocal selected_idx
+        args = cast(dict[str, Any], e.args)
+        idx = int(args.get('idx', -1))
+        if idx < 0 or idx >= len(gestiones):
+            return
+        selected_idx = idx
+        gest = gestiones[idx]
+        cliente.set_value(gest['cliente'])
+        poliza.set_value(gest['poliza'])
+        dominio.set_value(gest['dominio'])
+        importe.set_value(gest['importe'])
+        comentario.set_value(gest['comentario'])
+        _render_pendientes()
+
+    def _quitar_gestion(e: events.GenericEventArguments) -> None:
+        nonlocal selected_idx
+        args = cast(dict[str, Any], e.args)
+        idx = int(args.get('idx', -1))
+        if 0 <= idx < len(gestiones):
+            gestiones.pop(idx)
+        selected_idx = None
+        _render_pendientes()
+
     def _agregar_gestion() -> None:
+        nonlocal selected_idx
         error.set_text('')
         cliente_val = _text(cliente.value)
         dominio_val = _text(dominio.value)
         if not cliente_val and not dominio_val:
             error.set_text('Complete al menos Cliente o Dominio')
             return
-        gestiones.append(
-            {
-                'cliente': cliente_val,
-                'dominio': dominio_val or '',
-                'poliza': _text(poliza.value) or '',
-                'importe': float(importe.value or 0.0),
-                'comentario': _text(comentario.value),
-                'documentos': list(archivos),
-            }
-        )
+        if selected_idx is not None and 0 <= selected_idx < len(gestiones):
+            documentos = gestiones[selected_idx]['documentos']
+        else:
+            documentos = list(archivos)
+        valores = {
+            'cliente': cliente_val,
+            'dominio': dominio_val or '',
+            'poliza': _text(poliza.value) or '',
+            'importe': float(importe.value or 0.0),
+            'comentario': _text(comentario.value),
+            'documentos': documentos,
+        }
+        selected_idx = _upsert_gestion(gestiones, selected_idx, valores)
         archivos.clear()
         cliente.set_value('')
         poliza.set_value('')
@@ -1093,6 +1163,31 @@ def open_nuevo_lote_tres_arr(
             'Generar pagos (SM → Prestador por transferencia)',
             value=True,
         )
+
+        ui.label('Documentos del grupo').classes('text-subtitle2')
+        ui.label('Se adjuntan al grupo y a cada gestión del lote.').classes(
+            'text-caption text-grey-7'
+        )
+
+        async def _on_upload_grupo(e: events.UploadEventArguments) -> None:
+            contenido = await e.file.read()
+            archivos_grupo.append(
+                {
+                    'nombre': e.file.name,
+                    'mime': e.file.content_type or '',
+                    'contenido': contenido,
+                }
+            )
+            _render_pendientes()
+
+        ui.upload(
+            label='Documentos del grupo',
+            auto_upload=True,
+            multiple=True,
+            on_upload=_on_upload_grupo,
+        ).props('accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"')
+        grupo_docs_container = ui.column().classes('gap-0 w-full')
+
         ui.label('Gestiones').classes('text-subtitle1')
         with ui.grid(columns=2).classes('gap-4 w-full'):
             cliente = ui.input('Cliente').props('outlined')
@@ -1103,7 +1198,7 @@ def open_nuevo_lote_tres_arr(
             )
             comentario = ui.textarea('Comentario').props('outlined rows=2')
 
-        async def _on_upload(e: events.UploadEventArguments) -> None:
+        async def _on_upload_gestion(e: events.UploadEventArguments) -> None:
             contenido = await e.file.read()
             archivos.append(
                 {
@@ -1117,7 +1212,7 @@ def open_nuevo_lote_tres_arr(
             label='Documentos de la gestión (se adjuntan al lote)',
             auto_upload=True,
             multiple=True,
-            on_upload=_on_upload,
+            on_upload=_on_upload_gestion,
         ).props('accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"')
 
         ui.button(
@@ -1163,10 +1258,22 @@ def open_nuevo_lote_tres_arr(
                 )
                 for gest in gestiones
             ]
+            group_docs = [
+                DocumentoCreate(
+                    document_hash=_file_hash(file['contenido']),
+                    tipo='adjunto',
+                    nombre=file['nombre'],
+                    contenido=file['contenido'],
+                    tamanio=len(file['contenido']),
+                    mime=file['mime'],
+                )
+                for file in archivos_grupo
+            ]
             data = LoteTresArrCreate(
                 grupo=grupo_nombre,
                 usuario_creacion=user.username if user is not None else None,
                 gestiones=items,
+                documentos=group_docs,
                 generar_pagos=generar_pagos.value
                 if generar_pagos is not None
                 else True,

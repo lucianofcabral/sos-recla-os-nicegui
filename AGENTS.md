@@ -2,7 +2,7 @@
 
 ## Status
 
-App NiceGUI hexagonal completa y verde (235 tests). Capas: `src/domain` (entidades pydantic frozen, ports, excepciones), `src/application` (use cases con `UnitOfWorkPort`, commit explícito; queries de read-model), `src/adapters/sqlmodel` (9 `XxxRow` + repos que flush pero nunca commit), `src/infrastructure` (`SqlModelUnitOfWork`, `DATABASE_URL` Postgres con fallback SQLite), `src/ui` (login, home, pagos, periodos, migracion; consume `QueryPort` y use cases).
+App NiceGUI hexagonal completa y verde (278 tests). Capas: `src/domain` (entidades pydantic frozen, ports, excepciones), `src/application` (use cases con `UnitOfWorkPort`, commit explícito; queries de read-model), `src/adapters/sqlmodel` (9 `XxxRow` + repos que flush pero nunca commit), `src/infrastructure` (`SqlModelUnitOfWork`, `DATABASE_URL` Postgres con fallback SQLite), `src/ui` (login, home, pagos, periodos, migracion; consume `QueryPort` y use cases).
 
 App: `uv run python -m src.ui.main` → http://127.0.0.1:8081 (`UI_HOST`/`UI_PORT`/`STORAGE_SECRET`; `scripts/bootstrap.py` crea el primer usuario). Import histórico: `scripts/import_old_db.py` (`--apply` escribe). Deploy: Dockerfile + `docker-compose.prod.yml` (Portainer) + README.md.
 
@@ -11,7 +11,7 @@ App: `uv run python -m src.ui.main` → http://127.0.0.1:8081 (`UI_HOST`/`UI_POR
 ## Commands
 
 ```sh
-uv run pytest -q              # tests (235) — usar -q; tests/ui/ para cambios de UI
+uv run pytest -q              # tests (278) — usar -q; tests/ui/ para cambios de UI
 uv run ruff check .           # lint (E,W,F,I,N,UP,C4,SIM,RUF; E501 ignorado; 88 cols)
 uv run ruff format .          # formato (single quotes)
 ```
