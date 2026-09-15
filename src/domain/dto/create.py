@@ -115,4 +115,5 @@ class LoteTresArrCreate(BaseModel):
     grupo: str = Field(min_length=1, max_length=100)
     usuario_creacion: str | None = None
     gestiones: list[GestionLoteItem] = []
+    documentos: list[DocumentoCreate] = []
     generar_pagos: bool = True

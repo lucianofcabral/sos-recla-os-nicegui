@@ -6,6 +6,7 @@ from src.application.use_cases.documento import (
     DocumentoAdjuntar,
     DocumentoEliminar,
     DocumentoListarPorEntidad,
+    adjuntar_documento,
 )
 from src.domain.domain_enums import TipoEntidadEnum
 from src.domain.dto.create import DocumentoCreate
@@ -126,3 +127,40 @@ def test_listar_por_entidad_vacia() -> None:
     uow = FakeUnitOfWork()
     docs = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.RECLAMO, 1)
     assert docs == []
+
+
+def test_adjuntar_documento_persiste_sin_commit() -> None:
+    """The extracted helper persists the document and link but never commits."""
+    uow = FakeUnitOfWork()
+    doc = adjuntar_documento(uow, TipoEntidadEnum.RECLAMO, 1, _make_doccreate())
+    assert doc.document_hash == 'a' * 64
+    assert uow.committed is False
+    assert uow.documentos.get_by_hash('a' * 64) is not None
+    vinculos = uow.entidad_documentos.list()
+    assert len(vinculos) == 1
+    assert vinculos[0].tipo_entidad == TipoEntidadEnum.RECLAMO
+    assert vinculos[0].entidad_id == 1
+
+
+def test_adjuntar_documento_reutiliza_hash_sin_duplicar_vinculo() -> None:
+    """Reusing the same hash/entity leaves one Documento and one link."""
+    uow = FakeUnitOfWork()
+    doc_create = _make_doccreate()
+    primero = adjuntar_documento(uow, TipoEntidadEnum.RECLAMO, 1, doc_create)
+    segundo = adjuntar_documento(uow, TipoEntidadEnum.RECLAMO, 1, doc_create)
+    assert primero.document_hash == segundo.document_hash
+    assert len(uow.documentos.list()) == 1
+    assert len(uow.entidad_documentos.list()) == 1
+    assert uow.committed is False
+
+
+def test_grupo_adjuntar_listar_eliminar() -> None:
+    """GRUPO supports the full attach/list/remove document lifecycle."""
+    uow = FakeUnitOfWork()
+    DocumentoAdjuntar(uow)(TipoEntidadEnum.GRUPO, 5, _make_doccreate())
+    assert uow.committed is True
+    docs = DocumentoListarPorEntidad(uow)(TipoEntidadEnum.GRUPO, 5)
+    assert [d.nombre for d in docs] == ['test.pdf']
+    DocumentoEliminar(uow)(TipoEntidadEnum.GRUPO, 5, 'a' * 64)
+    assert DocumentoListarPorEntidad(uow)(TipoEntidadEnum.GRUPO, 5) == []
+    assert uow.documentos.get_by_hash('a' * 64) is None
