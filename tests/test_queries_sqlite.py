@@ -129,10 +129,10 @@ def test_sql_pagos_con_detalle(engine) -> None:
         assert item.cliente == 'ACME'
         assert item.nro_gestion == 1001
         assert item.grupo is None
-    assert items[0].forma_pago == FormaPagoEnum.TRANSFERENCIA
-    assert items[0].monto == 8000.0
-    assert items[1].forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
-    assert items[1].monto == 5000.0
+    assert items[0].forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
+    assert items[0].monto == 5000.0
+    assert items[1].forma_pago == FormaPagoEnum.TRANSFERENCIA
+    assert items[1].monto == 8000.0
 
 
 def test_sql_pagos_grupo_y_filtros(engine) -> None:
@@ -333,6 +333,66 @@ def test_sql_home_filtro_combinado(engine) -> None:
         )
     assert len(items) == 1
     assert items[0].dominio == 'CD456EF'
+
+
+def test_sql_home_paginacion(engine) -> None:
+    _seed_filtros(engine)
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        pagina1 = uow.list_home_pagina(None, offset=0, limit=2)
+        pagina2 = uow.list_home_pagina(None, offset=2, limit=2)
+    assert pagina1.total == 4
+    assert len(pagina1.items) == 2
+    assert len(pagina2.items) == 2
+    dominios = {item.dominio for item in pagina1.items + pagina2.items}
+    assert dominios == {'AB123CD', 'CD456EF', 'SR111TT', 'ZZ999'}
+
+
+def test_sql_home_paginacion_orden(engine) -> None:
+    _seed_filtros(engine)
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        asc = uow.list_home_pagina(
+            None, offset=0, limit=20, sort_by='dominio', descending=False
+        )
+    assert [item.dominio for item in asc.items] == [
+        'AB123CD',
+        'CD456EF',
+        'SR111TT',
+        'ZZ999',
+    ]
+
+
+def test_sql_pagos_paginacion(engine) -> None:
+    _seed_filtros(engine)
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        pagina = uow.list_pagos_pagina(None, offset=0, limit=2)
+    assert pagina.total == 3
+    assert len(pagina.items) == 2
+
+
+def test_sql_pagos_orden_fecha_desc(engine) -> None:
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        reclamo = uow.reclamos.save(
+            Reclamo(cliente='X', poliza='P-1', dominio='D1')
+        )
+        assert reclamo.id is not None
+        for monto, fecha in (
+            (100.0, date(2026, 1, 1)),
+            (200.0, date(2026, 3, 3)),
+            (300.0, None),
+        ):
+            uow.pagos.save(
+                Pago(
+                    reclamo_id=reclamo.id,
+                    forma_pago=FormaPagoEnum.TRANSFERENCIA,
+                    pagador=AgenteEnum.ASEGURADO,
+                    destinatario=AgenteEnum.PRESTADOR,
+                    monto=monto,
+                    fecha_pago=fecha,
+                )
+            )
+        uow.commit()
+        page = uow.list_pagos_pagina(None, offset=0, limit=20)
+    assert [item.monto for item in page.items] == [200.0, 100.0, 300.0]
 
 
 def test_sql_home_filtro_tipo_y_con_pagos(engine) -> None:

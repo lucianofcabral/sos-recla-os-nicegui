@@ -10,8 +10,10 @@ from src.domain.dto.read import (
     NotaCreditoSinAsignarItem,
     PagoListFilter,
     PagoListItem,
+    PagoListPage,
     ReclamoHomeFilter,
     ReclamoHomeItem,
+    ReclamoHomePage,
 )
 
 
@@ -23,11 +25,29 @@ class QueryPort(Protocol):
         self, filtro: ReclamoHomeFilter | None = None
     ) -> list[ReclamoHomeItem]: ...
 
+    def list_home_pagina(
+        self,
+        filtro: ReclamoHomeFilter | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = 20,
+        sort_by: str | None = None,
+        descending: bool = False,
+    ) -> ReclamoHomePage: ...
+
     def list_grupos(self) -> list[str]: ...
 
     def list_pagos_con_detalle(
         self, filtro: PagoListFilter | None = None
     ) -> list[PagoListItem]: ...
+
+    def list_pagos_pagina(
+        self,
+        filtro: PagoListFilter | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = 20,
+    ) -> PagoListPage: ...
 
     def list_grupo_detalle(self, grupo_id: int) -> list[GrupoReclamoItem]: ...
 

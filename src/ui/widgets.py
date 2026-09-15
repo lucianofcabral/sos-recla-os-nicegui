@@ -55,13 +55,14 @@ def pagos_table(
     action_icon: str = 'delete',
     action_props: str = 'flat dense',
     classes: str = 'w-full',
-    pagination: int | None = None,
+    pagination: int | dict | None = None,
 ) -> ui.table:
     """Render a pagos table with the standard 5-column set or a custom column set.
 
     ``actions`` names the column hosting the per-row action button; its column
     definition is appended when not already present in ``columns``.
-    ``pagination`` enables Quasar's built-in pagination (rows per page).
+    ``pagination`` enables Quasar's built-in pagination (int rows-per-page, or a
+    dict with ``rowsNumber``/``page``/``rowsPerPage`` for server-side pagination).
     """
     effective = list(PAGO_COLUMNS) if columns is None else list(columns)
     if actions is not None and not any(col.get('name') == actions for col in effective):

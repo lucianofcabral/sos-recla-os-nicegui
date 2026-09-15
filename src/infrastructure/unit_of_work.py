@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Self
 
-from sqlalchemy import func
+from sqlalchemy import String, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
@@ -39,9 +39,19 @@ from src.domain.dto.read import (
     NotaCreditoSinAsignarItem,
     PagoListFilter,
     PagoListItem,
+    PagoListPage,
     ReclamoHomeFilter,
     ReclamoHomeItem,
+    ReclamoHomePage,
 )
+
+_RECLAMO_SORT_COLUMNS: dict[str, object] = {
+    'created_at': ReclamoRow.created_at,
+    'dominio': ReclamoRow.dominio,
+    'poliza': ReclamoRow.poliza,
+    'cliente': ReclamoRow.cliente,
+    'tipo_reclamo': ReclamoRow.tipo_reclamo,
+}
 
 
 class SqlModelUnitOfWork:
@@ -75,31 +85,127 @@ class SqlModelUnitOfWork:
     def list_home(
         self, filtro: ReclamoHomeFilter | None = None
     ) -> list[ReclamoHomeItem]:
-        """Home listing: reclamos + SOS nro_gestion + pago flags (no N+1)."""
-        nro_por_reclamo: dict[int, int] = {}
-        for sos in self._session.exec(select(ReclamoSosRow)).all():
-            if sos.reclamo_id is not None:
-                nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
-        pagos_por_reclamo: dict[int, list[PagoRow]] = {}
-        for pago in self._session.exec(select(PagoRow)).all():
-            if pago.reclamo_id is not None:
-                pagos_por_reclamo.setdefault(pago.reclamo_id, []).append(pago)
-        grupo_por_reclamo: dict[int, str | None] = {}
-        nombre_por_grupo_id: dict[int, str] = {
-            grupo.id: grupo.grupo
-            for grupo in self._session.exec(select(GrupoRow)).all()
-            if grupo.id is not None
-        }
-        for tres_arr in self._session.exec(select(TresArrRow)).all():
-            if tres_arr.reclamo_id is not None:
-                nombre = (
-                    nombre_por_grupo_id.get(tres_arr.grupo_id)
-                    if tres_arr.grupo_id is not None
-                    else None
+        """Home listing (unpaginated): delegates to the paginated SQL query."""
+        return self.list_home_pagina(filtro, offset=0, limit=None).items
+
+    def list_home_pagina(
+        self,
+        filtro: ReclamoHomeFilter | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = 20,
+        sort_by: str | None = None,
+        descending: bool = False,
+    ) -> ReclamoHomePage:
+        """Home listing: SQL filtering, ordering and LIMIT/OFFSET pagination."""
+        conditions: list = self._reclamo_filter_conditions(filtro)
+        total = int(
+            self._session.exec(
+                select(func.count(ReclamoRow.id)).where(*conditions)
+            ).one()
+        )
+        sort_col = _RECLAMO_SORT_COLUMNS.get(sort_by or 'created_at')
+        eff_desc = descending if sort_by is not None else True
+        order = (
+            sort_col.desc() if eff_desc else sort_col.asc(),
+            ReclamoRow.id.desc() if eff_desc else ReclamoRow.id.asc(),
+        )
+        statement = select(ReclamoRow).where(*conditions).order_by(*order)
+        if limit is not None:
+            statement = statement.offset(offset).limit(limit)
+        rows = self._session.exec(statement).all()
+        return ReclamoHomePage(
+            items=self._reclamo_rows_to_items(rows),
+            total=total,
+        )
+
+    def _reclamo_filter_conditions(self, filtro: ReclamoHomeFilter | None) -> list:
+        conditions: list = []
+        if filtro is None:
+            return conditions
+        if filtro.fecha_desde is not None:
+            conditions.append(func.date(ReclamoRow.created_at) >= filtro.fecha_desde)
+        if filtro.fecha_hasta is not None:
+            conditions.append(func.date(ReclamoRow.created_at) <= filtro.fecha_hasta)
+        if filtro.importe_min is not None:
+            conditions.append(ReclamoRow.importe_reclamado >= filtro.importe_min)
+        if filtro.importe_max is not None:
+            conditions.append(ReclamoRow.importe_reclamado <= filtro.importe_max)
+        if filtro.con_pagos is not None:
+            tiene_pagos = (
+                select(PagoRow.id).where(PagoRow.reclamo_id == ReclamoRow.id).exists()
+            )
+            conditions.append(tiene_pagos if filtro.con_pagos else ~tiene_pagos)
+        if filtro.con_nota_credito is not None:
+            tiene_nc = (
+                select(PagoRow.id)
+                .where(
+                    PagoRow.reclamo_id == ReclamoRow.id,
+                    PagoRow.forma_pago == FormaPagoEnum.NOTA_DE_CREDITO.value,
                 )
-                grupo_por_reclamo[tres_arr.reclamo_id] = nombre or tres_arr.grupo
+                .exists()
+            )
+            conditions.append(tiene_nc if filtro.con_nota_credito else ~tiene_nc)
+        if filtro.active is not None:
+            conditions.append(ReclamoRow.active == filtro.active)
+        if filtro.tipo_reclamo is not None:
+            conditions.append(ReclamoRow.tipo_reclamo == filtro.tipo_reclamo.value)
+        if filtro.grupo is not None:
+            conditions.append(
+                select(TresArrRow.id)
+                .where(
+                    TresArrRow.reclamo_id == ReclamoRow.id,
+                    TresArrRow.grupo == filtro.grupo,
+                )
+                .exists()
+            )
+        if filtro.texto:
+            conditions.append(self._reclamo_texto_condition(filtro.texto))
+        return conditions
+
+    def _reclamo_texto_condition(self, texto: str):
+        needle = f'%{texto.lower()}%'
+        return or_(
+            func.lower(func.coalesce(ReclamoRow.dominio, '')).like(needle),
+            func.lower(func.coalesce(ReclamoRow.cliente, '')).like(needle),
+            func.lower(func.coalesce(ReclamoRow.poliza, '')).like(needle),
+            func.lower(func.coalesce(ReclamoRow.tipo_reclamo, '')).like(needle),
+            func.lower(func.cast(ReclamoRow.importe_reclamado, String)).like(needle),
+            func.lower(func.cast(func.date(ReclamoRow.created_at), String)).like(
+                needle
+            ),
+            select(ReclamoSosRow.id)
+            .where(
+                ReclamoSosRow.reclamo_id == ReclamoRow.id,
+                func.lower(func.cast(ReclamoSosRow.nro_gestion, String)).like(needle),
+            )
+            .exists(),
+            select(TresArrRow.id)
+            .where(
+                TresArrRow.reclamo_id == ReclamoRow.id,
+                func.lower(func.coalesce(TresArrRow.grupo, '')).like(needle),
+            )
+            .exists(),
+        )
+
+    def _reclamo_rows_to_items(self, rows: list[ReclamoRow]) -> list[ReclamoHomeItem]:
+        ids = [row.id for row in rows if row.id is not None]
+        nro_por_reclamo: dict[int, int] = {}
+        pagos_por_reclamo: dict[int, list[PagoRow]] = {}
+        if ids:
+            for sos in self._session.exec(
+                select(ReclamoSosRow).where(ReclamoSosRow.reclamo_id.in_(ids))
+            ).all():
+                if sos.reclamo_id is not None:
+                    nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
+            for pago in self._session.exec(
+                select(PagoRow).where(PagoRow.reclamo_id.in_(ids))
+            ).all():
+                if pago.reclamo_id is not None:
+                    pagos_por_reclamo.setdefault(pago.reclamo_id, []).append(pago)
         items: list[ReclamoHomeItem] = []
-        for reclamo in self.reclamos.list(active_only=False):
+        for row in rows:
+            reclamo = row.to_entity()
             reclamo_id = reclamo.id
             assert reclamo_id is not None
             pagos = pagos_por_reclamo.get(reclamo_id, [])
@@ -121,17 +227,7 @@ class SqlModelUnitOfWork:
                     ),
                 )
             )
-        items.sort(
-            key=lambda item: item.created_at or datetime.min,
-            reverse=True,
-        )
-        if filtro is None:
-            return items
-        return [
-            item
-            for item in items
-            if filtro.matches(item, grupo_por_reclamo.get(item.reclamo_id))
-        ]
+        return items
 
     def list_grupos(self) -> list[str]:
         """Group names from the ``grupos`` table, sorted."""
@@ -141,27 +237,93 @@ class SqlModelUnitOfWork:
     def list_pagos_con_detalle(
         self, filtro: PagoListFilter | None = None
     ) -> list[PagoListItem]:
-        """Pagos listing with reclamo detail, SOS nro_gestion and grupo (no N+1)."""
-        pagos = self.pagos.list()
-        reclamo_ids = {p.reclamo_id for p in pagos if p.reclamo_id is not None}
+        """Pagos listing (unpaginated): delegates to the paginated SQL query."""
+        return self.list_pagos_pagina(filtro, offset=0, limit=None).items
+
+    def list_pagos_pagina(
+        self,
+        filtro: PagoListFilter | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = 20,
+    ) -> PagoListPage:
+        """Pagos listing: SQL filtering and LIMIT/OFFSET pagination (id order)."""
+        conditions: list = self._pago_filter_conditions(filtro)
+        total = int(
+            self._session.exec(select(func.count(PagoRow.id)).where(*conditions)).one()
+        )
+        statement = (
+            select(PagoRow)
+            .options(selectinload(PagoRow.reclamo))
+            .where(*conditions)
+            .order_by(
+                PagoRow.fecha_pago.desc().nullslast(),
+                PagoRow.id.desc(),
+            )
+        )
+        if limit is not None:
+            statement = statement.offset(offset).limit(limit)
+        rows = self._session.exec(statement).all()
+        return PagoListPage(
+            items=self._pago_rows_to_items(rows),
+            total=total,
+        )
+
+    def _pago_filter_conditions(self, filtro: PagoListFilter | None) -> list:
+        conditions: list = []
+        if filtro is None or filtro.is_empty():
+            return conditions
+        if filtro.pagadores:
+            conditions.append(PagoRow.pagador.in_([a.value for a in filtro.pagadores]))
+        if filtro.destinatarios:
+            conditions.append(
+                PagoRow.destinatario.in_([a.value for a in filtro.destinatarios])
+            )
+        if filtro.formas:
+            conditions.append(PagoRow.forma_pago.in_([f.value for f in filtro.formas]))
+        if filtro.texto:
+            conditions.append(self._pago_texto_condition(filtro.texto))
+        return conditions
+
+    def _pago_texto_condition(self, texto: str):
+        needle = f'%{texto.lower()}%'
+        return or_(
+            select(ReclamoRow.id)
+            .where(
+                ReclamoRow.id == PagoRow.reclamo_id,
+                or_(
+                    func.lower(func.coalesce(ReclamoRow.dominio, '')).like(needle),
+                    func.lower(func.coalesce(ReclamoRow.cliente, '')).like(needle),
+                    func.lower(func.coalesce(ReclamoRow.poliza, '')).like(needle),
+                ),
+            )
+            .exists(),
+            select(TresArrRow.id)
+            .where(
+                TresArrRow.reclamo_id == PagoRow.reclamo_id,
+                func.lower(func.coalesce(TresArrRow.grupo, '')).like(needle),
+            )
+            .exists(),
+        )
+
+    def _pago_rows_to_items(self, rows: list[PagoRow]) -> list[PagoListItem]:
+        reclamo_ids = {r.reclamo_id for r in rows if r.reclamo_id is not None}
         nro_por_reclamo: dict[int, int] = {}
-        if reclamo_ids:
-            sos_rows = self._session.exec(
-                select(ReclamoSosRow).where(ReclamoSosRow.reclamo_id.in_(reclamo_ids))
-            ).all()
-            for sos in sos_rows:
-                if sos.reclamo_id is not None:
-                    nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
         grupo_por_reclamo: dict[int, str] = {}
         if reclamo_ids:
-            tres_rows = self._session.exec(
+            for sos in self._session.exec(
+                select(ReclamoSosRow).where(ReclamoSosRow.reclamo_id.in_(reclamo_ids))
+            ).all():
+                if sos.reclamo_id is not None:
+                    nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
+            for tres in self._session.exec(
                 select(TresArrRow).where(TresArrRow.reclamo_id.in_(reclamo_ids))
-            ).all()
-            for tres in tres_rows:
+            ).all():
                 if tres.reclamo_id is not None and tres.grupo is not None:
                     grupo_por_reclamo[tres.reclamo_id] = tres.grupo
         items: list[PagoListItem] = []
-        for pago in pagos:
+        for row in rows:
+            pago = row.to_entity()
             assert pago.id is not None
             reclamo = pago.reclamo
             items.append(
@@ -187,9 +349,7 @@ class SqlModelUnitOfWork:
                     ),
                 )
             )
-        if filtro is None or filtro.is_empty():
-            return items
-        return [item for item in items if filtro.matches(item)]
+        return items
 
     def list_grupo_detalle(self, grupo_id: int) -> list[GrupoReclamoItem]:
         """Gestions of a Tres Arroyos group with pago detail (no N+1)."""

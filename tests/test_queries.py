@@ -8,8 +8,10 @@ from src.application.queries import (
     list_ciclos,
     list_grupos,
     list_home,
+    list_home_pagina,
     list_notas_credito_sin_asignar,
     list_pagos_con_detalle,
+    list_pagos_pagina,
 )
 from src.application.use_cases.factura import FacturaNueva
 from src.application.use_cases.nota_credito import AsignarNotaCreditoAPeriodo
@@ -128,10 +130,10 @@ def test_list_pagos_con_detalle() -> None:
         assert item.poliza == 'P-001'
         assert item.cliente == 'ACME'
         assert item.nro_gestion == 1001
-    assert items[0].forma_pago == FormaPagoEnum.TRANSFERENCIA
-    assert items[0].monto == 8000.0
-    assert items[1].forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
-    assert items[1].monto == 5000.0
+    assert items[0].forma_pago == FormaPagoEnum.NOTA_DE_CREDITO
+    assert items[0].monto == 5000.0
+    assert items[1].forma_pago == FormaPagoEnum.TRANSFERENCIA
+    assert items[1].monto == 8000.0
 
 
 def test_list_ciclos() -> None:
@@ -305,6 +307,35 @@ def test_list_home_filtro_texto_parcial() -> None:
     assert len(list_home(uow, ReclamoHomeFilter(texto='1001'))) == 1
     assert len(list_home(uow, ReclamoHomeFilter(texto='ZZ99'))) == 1
     assert list_home(uow, ReclamoHomeFilter(texto='noexiste')) == []
+
+
+def test_list_home_filtro_texto_todos_los_campos() -> None:
+    uow = _dataset_filtros()
+    assert len(list_home(uow, ReclamoHomeFilter(texto='acme'))) == 1
+    assert len(list_home(uow, ReclamoHomeFilter(texto='gest'))) == 1
+    assert len(list_home(uow, ReclamoHomeFilter(texto='tres arroyos'))) == 2
+    assert len(list_home(uow, ReclamoHomeFilter(texto='otros'))) == 1
+    assert len(list_home(uow, ReclamoHomeFilter(texto='grupo norte'))) == 1
+    assert len(list_home(uow, ReclamoHomeFilter(texto='15000'))) == 1
+    assert len(list_home(uow, ReclamoHomeFilter(texto='2026-05-10'))) == 1
+
+
+def test_list_home_paginacion() -> None:
+    uow = _dataset_filtros()
+    pagina1 = list_home_pagina(uow, None, offset=0, limit=2)
+    pagina2 = list_home_pagina(uow, None, offset=2, limit=2)
+    assert pagina1.total == 4
+    assert len(pagina1.items) == 2
+    assert len(pagina2.items) == 2
+    dominios = {item.dominio for item in pagina1.items + pagina2.items}
+    assert dominios == {'AB123CD', 'CD456EF', 'SR111TT', 'ZZ999'}
+
+
+def test_list_pagos_paginacion() -> None:
+    uow = _dataset_filtros()
+    pagina = list_pagos_pagina(uow, None, offset=0, limit=2)
+    assert pagina.total == 3
+    assert len(pagina.items) == 2
 
 
 def test_list_home_filtro_importe() -> None:

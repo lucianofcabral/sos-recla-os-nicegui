@@ -9,8 +9,10 @@ from src.domain.dto.read import (
     NotaCreditoSinAsignarItem,
     PagoListFilter,
     PagoListItem,
+    PagoListPage,
     ReclamoHomeFilter,
     ReclamoHomeItem,
+    ReclamoHomePage,
 )
 from src.domain.models.entities import CreditNote
 from tests.fakes.repositories import (
@@ -84,6 +86,34 @@ class FakeUnitOfWork:
     def list_home(
         self, filtro: ReclamoHomeFilter | None = None
     ) -> list[ReclamoHomeItem]:
+        return self.list_home_pagina(filtro, offset=0, limit=None).items
+
+    def list_home_pagina(
+        self,
+        filtro: ReclamoHomeFilter | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = 20,
+        sort_by: str | None = None,
+        descending: bool = False,
+    ) -> ReclamoHomePage:
+        items = self._home_items()
+        if filtro is not None:
+            grupo_por_reclamo = self._grupo_por_reclamo()
+            items = [
+                item
+                for item in items
+                if filtro.matches(item, grupo_por_reclamo.get(item.reclamo_id))
+            ]
+        field = sort_by or 'created_at'
+        eff_desc = descending if sort_by is not None else True
+        items.sort(key=self._home_sort_key(field), reverse=eff_desc)
+        total = len(items)
+        if limit is not None:
+            items = items[offset : offset + limit]
+        return ReclamoHomePage(items=items, total=total)
+
+    def _home_items(self) -> list[ReclamoHomeItem]:
         items: list[ReclamoHomeItem] = []
         for reclamo in self.reclamos.list(active_only=False):
             reclamo_id = reclamo.id
@@ -108,12 +138,9 @@ class FakeUnitOfWork:
                     ),
                 )
             )
-        items.sort(
-            key=lambda item: item.created_at or datetime.min,
-            reverse=True,
-        )
-        if filtro is None:
-            return items
+        return items
+
+    def _grupo_por_reclamo(self) -> dict[int, str | None]:
         grupo_por_reclamo: dict[int, str | None] = {}
         nombre_por_grupo_id = {
             grupo.id: grupo.grupo
@@ -129,11 +156,21 @@ class FakeUnitOfWork:
                 else None
             )
             grupo_por_reclamo[tres_arr.reclamo_id] = nombre or tres_arr.grupo
-        return [
-            item
-            for item in items
-            if filtro.matches(item, grupo_por_reclamo.get(item.reclamo_id))
-        ]
+        return grupo_por_reclamo
+
+    @staticmethod
+    def _home_sort_key(field: str):
+        def key(item: ReclamoHomeItem):
+            value = getattr(item, field)
+            if field == 'created_at':
+                return value or datetime.min
+            if isinstance(value, str):
+                return value.lower()
+            if value is None:
+                return ''
+            return value.value.lower() if hasattr(value, 'value') else value
+
+        return key
 
     def list_grupos(self) -> list[str]:
         """Group names from the fake ``grupos`` repository, sorted."""
@@ -179,6 +216,15 @@ class FakeUnitOfWork:
     def list_pagos_con_detalle(
         self, filtro: PagoListFilter | None = None
     ) -> list[PagoListItem]:
+        return self.list_pagos_pagina(filtro, offset=0, limit=None).items
+
+    def list_pagos_pagina(
+        self,
+        filtro: PagoListFilter | None = None,
+        *,
+        offset: int = 0,
+        limit: int | None = 20,
+    ) -> PagoListPage:
         grupo_por_reclamo: dict[int, str] = {}
         for tres in self.tres_arr._store.values():
             if tres.reclamo_id is not None and tres.grupo is not None:
@@ -213,9 +259,16 @@ class FakeUnitOfWork:
                     ),
                 )
             )
-        if filtro is None or filtro.is_empty():
-            return items
-        return [item for item in items if filtro.matches(item)]
+        if filtro is not None and not filtro.is_empty():
+            items = [item for item in items if filtro.matches(item)]
+        items.sort(
+            key=lambda item: (item.fecha_pago or date.min, item.pago_id),
+            reverse=True,
+        )
+        total = len(items)
+        if limit is not None:
+            items = items[offset : offset + limit]
+        return PagoListPage(items=items, total=total)
 
     def list_ciclos(self) -> list[CicloCard]:
         cards: list[CicloCard] = []

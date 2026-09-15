@@ -7,7 +7,7 @@ from typing import Any, cast
 from nicegui import events, ui
 
 from src.application.format import format_date, format_money
-from src.application.queries import list_pagos_con_detalle
+from src.application.queries import list_pagos_pagina
 from src.application.use_cases.nota_credito import NotaCreditoBorrar
 from src.application.use_cases.pago import PagoBorrar
 from src.domain.domain_enums import FormaPagoEnum
@@ -79,11 +79,16 @@ def _credit_notes_by_pago_id(uow) -> dict[int, int]:
     return result
 
 
-def _load_rows(filtro: PagoListFilter | None = None) -> list[dict]:
+ROWS_PER_PAGE = 20
+
+
+def _load_page(
+    filtro: PagoListFilter | None, offset: int, limit: int
+) -> tuple[list[dict], int]:
     with uow_per_request() as uow:
-        items = list_pagos_con_detalle(uow, filtro)
+        page = list_pagos_pagina(uow, filtro, offset=offset, limit=limit)
         credit_note_by_pago = _credit_notes_by_pago_id(uow)
-    return [_row(item, credit_note_by_pago) for item in items]
+    return [_row(item, credit_note_by_pago) for item in page.items], page.total
 
 
 @page('Pagos', path='/pagos')
@@ -151,7 +156,7 @@ def pagos(user: User) -> None:
             return None if filtro.is_empty() else filtro
 
         def refresh_table() -> None:
-            table.update_rows(_load_rows(_build_filtro()))
+            _render_page(1, ROWS_PER_PAGE)
 
         def _limpiar_filtro() -> None:
             pagador.set_value(None)
@@ -180,15 +185,34 @@ def pagos(user: User) -> None:
             pago_id = int(row['pago_id'])
             open_editar_pago(pago_id, refresh_table)
 
+        def _render_page(page: int, rows_per_page: int) -> None:
+            offset = (page - 1) * rows_per_page
+            rows, total = _load_page(_build_filtro(), offset, rows_per_page)
+            table.update_rows(rows)
+            table.pagination = {
+                'page': page,
+                'rowsPerPage': rows_per_page,
+                'rowsNumber': total,
+            }
+
+        def _on_pagination_change(e: events.ValueChangeEventArguments) -> None:
+            pag = e.value or {}
+            _render_page(
+                int(pag.get('page', 1)),
+                int(pag.get('rowsPerPage', ROWS_PER_PAGE)),
+            )
+
+        first_rows, total = _load_page(_build_filtro(), 0, ROWS_PER_PAGE)
         table = pagos_table(
-            _load_rows(),
+            first_rows,
             columns=COLUMNS,
             actions='editar',
             action_icon='edit',
             on_action=on_edit,
             classes='',
-            pagination=20,
+            pagination={'rowsPerPage': ROWS_PER_PAGE, 'rowsNumber': total, 'page': 1},
         )
+        table.on_pagination_change(_on_pagination_change)
         row_action_button(
             table,
             'eliminar',

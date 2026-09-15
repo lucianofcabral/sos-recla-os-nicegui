@@ -69,18 +69,30 @@ class ReclamoHomeFilter(BaseModel):
         if self.grupo is not None and grupo != self.grupo:
             return False
         if self.texto:
-            haystack = ' '.join(
-                text
-                for text in (
-                    item.dominio or '',
-                    item.poliza or '',
-                    str(item.nro_gestion or ''),
-                )
-                if text
-            ).lower()
-            if self.texto.lower() not in haystack:
+            needle = self.texto.lower()
+            fields = (
+                item.dominio or '',
+                item.cliente or '',
+                item.poliza or '',
+                str(item.nro_gestion) if item.nro_gestion is not None else '',
+                item.tipo_reclamo.value if item.tipo_reclamo is not None else '',
+                str(item.importe_reclamado),
+                item.created_at.strftime('%Y-%m-%d')
+                if item.created_at is not None
+                else '',
+                grupo or '',
+            )
+            haystack = ' '.join(field.lower() for field in fields if field)
+            if needle not in haystack:
                 return False
         return True
+
+
+class ReclamoHomePage(BaseModel):
+    """A page of reclamos together with the total matching row count."""
+
+    items: list[ReclamoHomeItem]
+    total: int
 
 
 class PagoListItem(BaseModel):
@@ -136,6 +148,13 @@ class PagoListFilter(BaseModel):
             if self.texto.lower() not in haystack:
                 return False
         return True
+
+
+class PagoListPage(BaseModel):
+    """A page of pagos together with the total matching row count."""
+
+    items: list[PagoListItem]
+    total: int
 
 
 class GrupoReclamoItem(BaseModel):

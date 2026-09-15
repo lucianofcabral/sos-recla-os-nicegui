@@ -8,7 +8,7 @@ from typing import Any, cast
 from nicegui import events, ui
 
 from src.application.format import format_date, format_money
-from src.application.queries import list_grupos, list_home
+from src.application.queries import list_grupos, list_home_pagina
 from src.application.use_cases.reclamo import ReclamoAlternarEstado
 from src.domain.dto.read import ReclamoHomeFilter, ReclamoHomeItem
 from src.domain.models.entities import User
@@ -78,6 +78,17 @@ COLUMNS: list[dict] = [
 ]
 
 
+ROWS_PER_PAGE = 20
+
+SORT_FIELD_BY_COLUMN: dict[str, str] = {
+    'dominio': 'dominio',
+    'fecha_ingresado': 'created_at',
+    'poliza': 'poliza',
+    'cliente': 'cliente',
+    'tipo_reclamo': 'tipo_reclamo',
+}
+
+
 def _row(item: ReclamoHomeItem) -> dict:
     return {
         'reclamo_id': item.reclamo_id,
@@ -95,12 +106,6 @@ def _row(item: ReclamoHomeItem) -> dict:
         'has_credit_note': bool(item.has_credit_note),
         'active': bool(item.active),
     }
-
-
-def _load_rows(filtro: ReclamoHomeFilter | None = None) -> list[dict]:
-    with uow_per_request() as uow:
-        items = list_home(uow, filtro)
-    return [_row(item) for item in items]
 
 
 def _parse_fecha(value: str | None) -> date | None:
@@ -173,16 +178,9 @@ def home(user: User) -> None:
                     with_input=True,
                     clearable=True,
                 ).props('outlined dense')
-                texto = ui.input('Buscar (dominio, póliza, nro. gestión)').props(
+                texto = ui.input('Buscar (todos los campos)').props(
                     'outlined dense clearable :debounce="500"'
                 )
-
-        table = ui.table(
-            columns=COLUMNS,
-            rows=_load_rows(),
-            row_key='reclamo_id',
-            pagination=20,
-        ).classes('q-ma-auto')
 
         def _build_filtro() -> ReclamoHomeFilter | None:
             filtro = ReclamoHomeFilter(
@@ -215,8 +213,65 @@ def home(user: User) -> None:
                 return None
             return filtro
 
+        def _fetch_page(
+            offset: int, limit: int, sort_by: str | None, descending: bool
+        ) -> tuple[list[dict], int]:
+            filtro = _build_filtro()
+            with uow_per_request() as uow:
+                page = list_home_pagina(
+                    uow,
+                    filtro,
+                    offset=offset,
+                    limit=limit,
+                    sort_by=sort_by,
+                    descending=descending,
+                )
+            return [_row(item) for item in page.items], page.total
+
+        first_rows, total = _fetch_page(0, ROWS_PER_PAGE, None, False)
+        table = ui.table(
+            columns=COLUMNS,
+            rows=first_rows,
+            row_key='reclamo_id',
+            pagination={'rowsPerPage': ROWS_PER_PAGE, 'rowsNumber': total, 'page': 1},
+        ).classes('q-ma-auto')
+
+        current_sort: str | None = None
+        current_descending: bool = False
+
+        def _render_page(
+            page: int, rows_per_page: int, sort_col: str | None, descending: bool
+        ) -> None:
+            nonlocal current_sort, current_descending
+            current_sort = sort_col
+            current_descending = descending
+            sort_by = SORT_FIELD_BY_COLUMN.get(sort_col) if sort_col else None
+            offset = (page - 1) * rows_per_page
+            rows, total = _fetch_page(offset, rows_per_page, sort_by, descending)
+            table.update_rows(rows)
+            pagination: dict = {
+                'page': page,
+                'rowsPerPage': rows_per_page,
+                'rowsNumber': total,
+            }
+            if sort_col is not None:
+                pagination['sortBy'] = sort_col
+                pagination['descending'] = descending
+            table.pagination = pagination
+
+        def _on_pagination_change(e: events.ValueChangeEventArguments) -> None:
+            pag = e.value or {}
+            _render_page(
+                int(pag.get('page', 1)),
+                int(pag.get('rowsPerPage', ROWS_PER_PAGE)),
+                pag.get('sortBy'),
+                bool(pag.get('descending')),
+            )
+
+        table.on_pagination_change(_on_pagination_change)
+
         def refresh_table() -> None:
-            table.update_rows(_load_rows(_build_filtro()))
+            _render_page(1, ROWS_PER_PAGE, current_sort, current_descending)
 
         def _aplicar_filtro() -> None:
             refresh_table()
