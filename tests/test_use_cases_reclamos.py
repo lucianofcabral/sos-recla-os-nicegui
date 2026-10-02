@@ -10,10 +10,12 @@ from src.application.use_cases.reclamo import (
     SosReclamoNuevo,
     TresArrReclamoActualizar,
     TresArrReclamoBorrar,
+    TresArrReclamoConDocumentosNuevo,
     TresArrReclamoNuevo,
 )
-from src.domain.domain_enums import TipoReclamoEnum
+from src.domain.domain_enums import TipoEntidadEnum, TipoReclamoEnum
 from src.domain.dto.create import (
+    DocumentoCreate,
     OtrosReclamoCreate,
     ReclamoCreate,
     ReclamoSosCreate,
@@ -141,6 +143,27 @@ def test_tres_arr_sin_grupo_no_crea_grupo() -> None:
         assert tres.grupo is None
         assert tres.grupo_id is None
         assert uow.grupos.list() == []
+
+
+def test_tres_arr_con_documentos_adjunta_docs_al_reclamo() -> None:
+    with FakeUnitOfWork() as uow:
+        data = TresArrReclamoCreate(reclamo=_reclamo_data(), grupo='Grupo A')
+        doc = DocumentoCreate(
+            document_hash='a' * 64,
+            tipo='adjunto',
+            nombre='factura.pdf',
+            contenido=b'pdf',
+            tamanio=3,
+            mime='application/pdf',
+        )
+        tres = TresArrReclamoConDocumentosNuevo(uow)(data, [doc])
+        assert tres.reclamo is not None
+        assert tres.reclamo.id is not None
+        adjuntos = uow.documentos.list_by_entidad(
+            TipoEntidadEnum.RECLAMO, tres.reclamo.id
+        )
+        assert [d.document_hash for d in adjuntos] == ['a' * 64]
+        assert uow.committed is True
 
 
 def test_tres_arr_actualizar_resuelve_grupo_nuevo() -> None:

@@ -9,9 +9,11 @@ from typing import Any
 from nicegui.client import Client
 from nicegui.testing.user_simulation import user_simulation
 
-from src.domain.domain_enums import AgenteEnum, FormaPagoEnum
+from src.domain.domain_enums import AgenteEnum, FormaPagoEnum, TipoReclamoEnum
 from src.domain.dto.edit import PagoEdit
+from src.domain.models.entities import Grupo, Reclamo, TresArrReclamo
 from src.ui import dialogos
+from tests.fakes.unit_of_work import FakeUnitOfWork
 
 
 def test_pago_edit_payload_normal() -> None:
@@ -107,6 +109,59 @@ def test_lote_dialogo_expone_cargas_separadas() -> None:
         async with user_simulation(root=root) as user:
             await user.open('/')
             await user.should_see('Documentos del grupo')
+            await user.should_see('Documentos de la gestión')
+
+    asyncio.run(_correr())
+    Client.instances.clear()
+
+
+def test_grupo_dialogo_expone_agregar_y_eliminar_gestion(monkeypatch) -> None:
+    """The group dialog shows the add-gestión button and its gestiones table."""
+    uow = FakeUnitOfWork()
+    grupo = uow.grupos.save(Grupo(grupo='LOTE UI GRUPO'))
+    assert grupo.id is not None
+    reclamo = uow.reclamos.save(
+        Reclamo(
+            tipo_reclamo=TipoReclamoEnum.TRESA,
+            active=True,
+            cliente='CLIENTE GRUPO',
+            dominio='AB123CD',
+        )
+    )
+    assert reclamo.id is not None
+    uow.tres_arr.save(
+        TresArrReclamo(
+            reclamo_id=reclamo.id,
+            reclamo=reclamo,
+            grupo=grupo.grupo,
+            grupo_id=grupo.id,
+        )
+    )
+    monkeypatch.setattr(dialogos, 'uow_per_request', lambda: uow)
+
+    def root() -> None:
+        dialogos.open_grupo_tres_arr(grupo.id, lambda: None)
+
+    async def _correr() -> None:
+        async with user_simulation(root=root) as user:
+            await user.open('/')
+            await user.should_see('Gestiones')
+            await user.should_see('Agregar gestión')
+
+    asyncio.run(_correr())
+    Client.instances.clear()
+
+
+def test_dialogo_agregar_gestion_expone_carga_de_documentos() -> None:
+    """The add-gestión form exposes a document upload for the gestión."""
+
+    def root() -> None:
+        dialogos._dialogo_nueva_gestion_grupo('GRUPO', lambda: None)
+
+    async def _correr() -> None:
+        async with user_simulation(root=root) as user:
+            await user.open('/')
+            await user.should_see('Cliente')
             await user.should_see('Documentos de la gestión')
 
     asyncio.run(_correr())

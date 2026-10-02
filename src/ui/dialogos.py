@@ -31,6 +31,8 @@ from src.application.use_cases.reclamo import (
     SosReclamoActualizar,
     SosReclamoNuevo,
     TresArrReclamoActualizar,
+    TresArrReclamoBorrar,
+    TresArrReclamoConDocumentosNuevo,
     TresArrReclamoNuevo,
 )
 from src.domain.domain_enums import (
@@ -625,6 +627,87 @@ def open_editar_reclamo(
     dialog.open()
 
 
+def _dialogo_nueva_gestion_grupo(
+    grupo_nombre: str, on_exito: Callable[[], None]
+) -> None:
+    """Open the form to add a gestión (with documents) to a 3 Arroyos group."""
+    with modal('Agregar gestión al grupo', width='w-[32rem]') as dialog:
+        with ui.grid(columns=2).classes('gap-4 w-full'):
+            cliente = ui.input('Cliente').props('outlined')
+            poliza = ui.input('Póliza').props('outlined')
+            dominio = ui.input('Dominio').props('outlined')
+            importe = ui.number('Importe Reclamado', format='%.2f', value=0).props(
+                'outlined'
+            )
+            comentario = ui.textarea('Comentario').props('outlined rows=2')
+
+        archivos: list[dict[str, Any]] = []
+
+        async def _on_upload(e: events.UploadEventArguments) -> None:
+            contenido = await e.file.read()
+            archivos.append(
+                {
+                    'nombre': e.file.name,
+                    'mime': e.file.content_type or '',
+                    'contenido': contenido,
+                }
+            )
+
+        ui.upload(
+            label='Documentos de la gestión',
+            auto_upload=True,
+            multiple=True,
+            on_upload=_on_upload,
+        ).props('accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xlsx"')
+
+        error = error_label()
+
+        def guardar() -> None:
+            error.set_text('')
+            cliente_val = _text(cliente.value)
+            dominio_val = _text(dominio.value)
+            if not cliente_val and not dominio_val:
+                error.set_text('Complete al menos Cliente o Dominio')
+                return
+            base = ReclamoCreate(
+                tipo_reclamo=TipoReclamoEnum.TRESA,
+                cliente=cliente_val,
+                poliza=_text(poliza.value) or '',
+                dominio=dominio_val or '',
+                importe_reclamado=float(importe.value or 0.0),
+                comentario=_text(comentario.value),
+            )
+            documentos = [
+                DocumentoCreate(
+                    document_hash=_file_hash(archivo['contenido']),
+                    tipo='adjunto',
+                    nombre=archivo['nombre'],
+                    contenido=archivo['contenido'],
+                    tamanio=len(archivo['contenido']),
+                    mime=archivo['mime'],
+                )
+                for archivo in archivos
+            ]
+            try:
+                with uow_per_request() as uow:
+                    TresArrReclamoConDocumentosNuevo(uow)(
+                        TresArrReclamoCreate(reclamo=base, grupo=grupo_nombre),
+                        documentos,
+                    )
+            except DomainError as exc:
+                error.set_text(str(exc))
+                return
+            except ValidationError as exc:
+                error.set_text(_validation_text(exc))
+                return
+            dialog.close()
+            ui.notify('Gestión agregada al grupo', type='positive')
+            on_exito()
+
+        form_footer(dialog, on_save=guardar)
+    dialog.open()
+
+
 def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
     """Open the group dialog: rename, gestiones with pagos, and group documents."""
     with uow_per_request() as uow:
@@ -664,6 +747,12 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
                             'field': 'editar',
                             'align': 'center',
                         },
+                        {
+                            'name': 'eliminar',
+                            'label': '',
+                            'field': 'eliminar',
+                            'align': 'center',
+                        },
                     ],
                     rows=[
                         {
@@ -686,6 +775,14 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
                 row_action_button(
                     table, 'editar', 'edit', _editar_gestion, event='click.stop'
                 )
+                row_action_button(
+                    table,
+                    'eliminar',
+                    'delete',
+                    _eliminar_gestion,
+                    event='click.stop',
+                    props='flat dense color=negative',
+                )
 
         def _on_row_clicked(e: events.GenericEventArguments) -> None:
             nonlocal selected_id
@@ -702,6 +799,32 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
             if reclamo_id < 0:
                 return
             open_editar_reclamo('tresa', reclamo_id, _reload)
+
+        def _eliminar_gestion(e: events.GenericEventArguments) -> None:
+            args = cast(dict[str, Any], e.args)
+            reclamo_id = int(args.get('reclamo_id', -1))
+            if reclamo_id < 0:
+                return
+            _confirmar_borrar_gestion(reclamo_id)
+
+        def _confirmar_borrar_gestion(reclamo_id: int) -> None:
+            with modal('Eliminar gestión') as dialog:
+                ui.label(
+                    '¿Eliminar esta gestión del grupo? El reclamo se marcará inactivo.'
+                )
+                form_footer(
+                    dialog,
+                    on_save=lambda: _borrar_gestion(reclamo_id, dialog),
+                    save_label='Eliminar',
+                )
+            dialog.open()
+
+        def _borrar_gestion(reclamo_id: int, dialog) -> None:
+            with uow_per_request() as uow:
+                TresArrReclamoBorrar(uow)(reclamo_id)
+            dialog.close()
+            ui.notify('Gestión eliminada', type='positive')
+            _reload()
 
         def _render_pagos() -> None:
             pagos_container.clear()
@@ -779,6 +902,14 @@ def open_grupo_tres_arr(grupo_id: int, refresh: Callable[[], None]) -> None:
             ui.button('Renombrar', on_click=_renombrar).props(
                 'unelevated color=primary'
             )
+
+        with ui.row().classes('items-center justify-between w-full'):
+            ui.label('Gestiones').classes('text-subtitle1')
+            ui.button(
+                'Agregar gestión',
+                icon='playlist_add',
+                on_click=lambda: _dialogo_nueva_gestion_grupo(grupo.grupo, _reload),
+            ).props('unelevated color=primary dense')
 
         gestiones_container = ui.column().classes('gap-1 w-full')
         pagos_container = ui.column().classes('gap-1 w-full')

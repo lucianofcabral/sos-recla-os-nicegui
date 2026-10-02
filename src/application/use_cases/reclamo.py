@@ -4,9 +4,11 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from src.application.use_cases.documento import adjuntar_documento
 from src.application.use_cases.pago import registrar_pago
-from src.domain.domain_enums import TipoReclamoEnum
+from src.domain.domain_enums import TipoEntidadEnum, TipoReclamoEnum
 from src.domain.dto.create import (
+    DocumentoCreate,
     OtrosReclamoCreate,
     PagoCreate,
     PagoReclamoCreate,
@@ -145,6 +147,31 @@ class SosReclamoBorrar:
             self._uow.commit()
 
 
+def _construir_tres_arr(
+    uow: UnitOfWorkPort, data: TresArrReclamoCreate
+) -> TresArrReclamo:
+    """Build and persist a Tres Arroyos reclamo + record without committing."""
+    reclamo = Reclamo(
+        tipo_reclamo=TipoReclamoEnum.TRESA,
+        active=True,
+        cliente=data.reclamo.cliente,
+        poliza=data.reclamo.poliza,
+        dominio=data.reclamo.dominio,
+        importe_reclamado=data.reclamo.importe_reclamado,
+        comentario=data.reclamo.comentario,
+    )
+    reclamo = uow.reclamos.save(reclamo)
+    assert reclamo.id is not None
+    return uow.tres_arr.save(
+        TresArrReclamo(
+            reclamo_id=reclamo.id,
+            reclamo=reclamo,
+            grupo=data.grupo,
+            grupo_id=_resolver_grupo_id(uow, data.grupo),
+        )
+    )
+
+
 class TresArrReclamoNuevo:
     """Create a Tres Arroyos reclamo and its associated record."""
 
@@ -153,25 +180,29 @@ class TresArrReclamoNuevo:
 
     def __call__(self, data: TresArrReclamoCreate) -> TresArrReclamo:
         with self._uow:
-            reclamo = Reclamo(
-                tipo_reclamo=TipoReclamoEnum.TRESA,
-                active=True,
-                cliente=data.reclamo.cliente,
-                poliza=data.reclamo.poliza,
-                dominio=data.reclamo.dominio,
-                importe_reclamado=data.reclamo.importe_reclamado,
-                comentario=data.reclamo.comentario,
-            )
-            reclamo = self._uow.reclamos.save(reclamo)
-            assert reclamo.id is not None
-            tresa = self._uow.tres_arr.save(
-                TresArrReclamo(
-                    reclamo_id=reclamo.id,
-                    reclamo=reclamo,
-                    grupo=data.grupo,
-                    grupo_id=_resolver_grupo_id(self._uow, data.grupo),
+            tresa = _construir_tres_arr(self._uow, data)
+            self._uow.commit()
+            return tresa
+
+
+class TresArrReclamoConDocumentosNuevo:
+    """Create a Tres Arroyos reclamo and attach its documents atomically."""
+
+    def __init__(self, uow: UnitOfWorkPort) -> None:
+        self._uow = uow
+
+    def __call__(
+        self,
+        data: TresArrReclamoCreate,
+        documentos: Sequence[DocumentoCreate] = (),
+    ) -> TresArrReclamo:
+        with self._uow:
+            tresa = _construir_tres_arr(self._uow, data)
+            assert tresa.reclamo_id is not None
+            for documento in documentos:
+                adjuntar_documento(
+                    self._uow, TipoEntidadEnum.RECLAMO, tresa.reclamo_id, documento
                 )
-            )
             self._uow.commit()
             return tresa
 

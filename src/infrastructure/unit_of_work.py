@@ -355,7 +355,10 @@ class SqlModelUnitOfWork:
         """Gestions of a Tres Arroyos group with pago detail (no N+1)."""
         tres_arr_rows = self._session.exec(
             select(TresArrRow)
-            .where(TresArrRow.grupo_id == grupo_id)
+            .where(
+                TresArrRow.grupo_id == grupo_id,
+                TresArrRow.reclamo.has(ReclamoRow.active.is_(True)),
+            )
             .options(selectinload(TresArrRow.reclamo))
             .order_by(TresArrRow.id)
         ).all()

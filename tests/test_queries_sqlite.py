@@ -371,9 +371,7 @@ def test_sql_pagos_paginacion(engine) -> None:
 
 def test_sql_pagos_orden_fecha_desc(engine) -> None:
     with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
-        reclamo = uow.reclamos.save(
-            Reclamo(cliente='X', poliza='P-1', dominio='D1')
-        )
+        reclamo = uow.reclamos.save(Reclamo(cliente='X', poliza='P-1', dominio='D1'))
         assert reclamo.id is not None
         for monto, fecha in (
             (100.0, date(2026, 1, 1)),
@@ -566,3 +564,36 @@ def test_sql_notas_credito_sin_asignar_vacia_con_periodo(engine) -> None:
         uow.commit()
         ncs = uow.list_notas_credito_sin_asignar()
     assert ncs == []
+
+
+def test_sql_list_grupo_detalle_excluye_reclamos_inactivos(engine) -> None:
+    """A soft-deleted gestión must not appear in the group detail listing."""
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        grupo = uow.grupos.save(Grupo(grupo='GRUPO FILTRO'))
+        assert grupo.id is not None
+        activo = uow.reclamos.save(
+            Reclamo(tipo_reclamo=TipoReclamoEnum.TRESA, cliente='A', dominio='A1')
+        )
+        inactivo = uow.reclamos.save(
+            Reclamo(tipo_reclamo=TipoReclamoEnum.TRESA, cliente='B', dominio='B2')
+        )
+        assert activo.id is not None
+        assert inactivo.id is not None
+        uow.tres_arr.save(
+            TresArrReclamo(
+                reclamo_id=activo.id,
+                grupo='GRUPO FILTRO',
+                grupo_id=grupo.id,
+            )
+        )
+        uow.tres_arr.save(
+            TresArrReclamo(
+                reclamo_id=inactivo.id,
+                grupo='GRUPO FILTRO',
+                grupo_id=grupo.id,
+            )
+        )
+        uow.reclamos.set_active(inactivo.id, False)
+        uow.commit()
+        items = uow.list_grupo_detalle(grupo.id)
+    assert [item.reclamo_id for item in items] == [activo.id]

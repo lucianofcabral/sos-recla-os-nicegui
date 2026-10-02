@@ -182,6 +182,8 @@ class FakeUnitOfWork:
         for tres in self.tres_arr.list_by_grupo_id(grupo_id):
             assert tres.reclamo_id is not None
             reclamo = tres.reclamo or self.reclamos.get(tres.reclamo_id)
+            if reclamo is None or not reclamo.active:
+                continue
             pagos = self.pagos.list(reclamo_id=tres.reclamo_id)
             items.append(
                 GrupoReclamoItem(
