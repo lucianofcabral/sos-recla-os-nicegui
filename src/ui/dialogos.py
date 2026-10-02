@@ -1105,7 +1105,8 @@ def open_nuevo_lote_tres_arr(
             'comentario': _text(comentario.value),
             'documentos': documentos,
         }
-        selected_idx = _upsert_gestion(gestiones, selected_idx, valores)
+        _upsert_gestion(gestiones, selected_idx, valores)
+        selected_idx = None
         archivos.clear()
         cliente.set_value('')
         poliza.set_value('')
