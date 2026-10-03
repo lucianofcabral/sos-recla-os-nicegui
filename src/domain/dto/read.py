@@ -19,6 +19,7 @@ class ReclamoHomeItem(BaseModel):
     cliente: str | None = None
     poliza: str = ''
     dominio: str = ''
+    grupo: str | None = None
     importe_reclamado: float = 0.0
     active: bool = True
     created_at: datetime | None = None

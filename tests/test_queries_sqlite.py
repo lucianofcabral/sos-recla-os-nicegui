@@ -361,6 +361,15 @@ def test_sql_home_paginacion_orden(engine) -> None:
     ]
 
 
+def test_sql_home_item_incluye_grupo(engine) -> None:
+    _seed_filtros(engine)
+    with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:
+        items = uow.list_home(ReclamoHomeFilter(tipo_reclamo=TipoReclamoEnum.TRESA))
+    por_dominio = {item.dominio: item for item in items}
+    assert por_dominio['CD456EF'].grupo == 'GRUPO NORTE'
+    assert por_dominio['SR111TT'].grupo == 'GRUPO SUR'
+
+
 def test_sql_pagos_paginacion(engine) -> None:
     _seed_filtros(engine)
     with Session(engine) as sess, SqlModelUnitOfWork(sess) as uow:

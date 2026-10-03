@@ -121,6 +121,14 @@ def test_list_home_fields() -> None:
     assert tresa_item.has_credit_note is False
 
 
+def test_list_home_item_incluye_grupo() -> None:
+    uow = _dataset_filtros()
+    items = list_home(uow, ReclamoHomeFilter(tipo_reclamo=TipoReclamoEnum.TRESA))
+    por_dominio = {item.dominio: item for item in items}
+    assert por_dominio['CD456EF'].grupo == 'GRUPO NORTE'
+    assert por_dominio['SR111TT'].grupo == 'GRUPO SUR'
+
+
 def test_list_pagos_con_detalle() -> None:
     uow = _dataset()
     items = list_pagos_con_detalle(uow)

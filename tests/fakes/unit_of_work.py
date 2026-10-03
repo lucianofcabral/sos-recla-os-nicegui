@@ -115,6 +115,7 @@ class FakeUnitOfWork:
 
     def _home_items(self) -> list[ReclamoHomeItem]:
         items: list[ReclamoHomeItem] = []
+        grupo_por_reclamo = self._grupo_por_reclamo()
         for reclamo in self.reclamos.list(active_only=False):
             reclamo_id = reclamo.id
             assert reclamo_id is not None
@@ -127,6 +128,7 @@ class FakeUnitOfWork:
                     cliente=reclamo.cliente,
                     poliza=reclamo.poliza or '',
                     dominio=reclamo.dominio or '',
+                    grupo=grupo_por_reclamo.get(reclamo_id),
                     importe_reclamado=reclamo.importe_reclamado or 0.0,
                     active=reclamo.active,
                     created_at=reclamo.created_at,

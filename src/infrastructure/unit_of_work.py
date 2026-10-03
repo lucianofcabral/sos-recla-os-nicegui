@@ -191,6 +191,7 @@ class SqlModelUnitOfWork:
     def _reclamo_rows_to_items(self, rows: list[ReclamoRow]) -> list[ReclamoHomeItem]:
         ids = [row.id for row in rows if row.id is not None]
         nro_por_reclamo: dict[int, int] = {}
+        grupo_por_reclamo: dict[int, str] = {}
         pagos_por_reclamo: dict[int, list[PagoRow]] = {}
         if ids:
             for sos in self._session.exec(
@@ -198,6 +199,11 @@ class SqlModelUnitOfWork:
             ).all():
                 if sos.reclamo_id is not None:
                     nro_por_reclamo[sos.reclamo_id] = sos.nro_gestion
+            for tres in self._session.exec(
+                select(TresArrRow).where(TresArrRow.reclamo_id.in_(ids))
+            ).all():
+                if tres.reclamo_id is not None and tres.grupo is not None:
+                    grupo_por_reclamo[tres.reclamo_id] = tres.grupo
             for pago in self._session.exec(
                 select(PagoRow).where(PagoRow.reclamo_id.in_(ids))
             ).all():
@@ -216,6 +222,7 @@ class SqlModelUnitOfWork:
                     cliente=reclamo.cliente,
                     poliza=reclamo.poliza or '',
                     dominio=reclamo.dominio or '',
+                    grupo=grupo_por_reclamo.get(reclamo_id),
                     importe_reclamado=reclamo.importe_reclamado or 0.0,
                     active=reclamo.active,
                     created_at=reclamo.created_at,

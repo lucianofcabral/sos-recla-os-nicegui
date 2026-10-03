@@ -34,6 +34,7 @@ COLUMNS: list[dict] = [
     },
     {'name': 'poliza', 'label': 'Póliza', 'field': 'poliza', 'sortable': True},
     {'name': 'cliente', 'label': 'Cliente', 'field': 'cliente', 'sortable': True},
+    {'name': 'grupo', 'label': 'Grupo', 'field': 'grupo', 'sortable': True},
     {
         'name': 'nro_gestion',
         'label': 'Nro. Gestión SOS',
@@ -71,7 +72,7 @@ COLUMNS: list[dict] = [
     },
     {
         'name': 'activar',
-        'label': 'Activar/Inactivar',
+        'label': 'Estado',
         'field': 'activar',
         'align': 'center',
     },
@@ -97,6 +98,7 @@ def _row(item: ReclamoHomeItem) -> dict:
         'fecha_ingresado': format_date(item.created_at),
         'poliza': item.poliza or '',
         'cliente': item.cliente or '',
+        'grupo': item.grupo or '',
         'nro_gestion': item.nro_gestion if item.nro_gestion is not None else '—',
         'tipo_reclamo': TIPO_LABELS.get(item.tipo_reclamo, '')
         if item.tipo_reclamo
@@ -148,7 +150,7 @@ def home(user: User) -> None:
                 con_credito = ui.checkbox('Con Nota de Crédito')
                 sin_credito = ui.checkbox('Sin Nota de Crédito')
                 ui.separator().props('vertical')
-                activos = ui.checkbox('Activos')
+                activos = ui.checkbox('Activos', value=True)
                 inactivos = ui.checkbox('Inactivos')
                 ui.separator().props('vertical')
                 ui.button('Filtrar', on_click=lambda: _aplicar_filtro()).props(
@@ -285,7 +287,7 @@ def home(user: User) -> None:
             sin_pagos.set_value(False)
             con_credito.set_value(False)
             sin_credito.set_value(False)
-            activos.set_value(False)
+            activos.set_value(True)
             inactivos.set_value(False)
             tipo.set_value(None)
             grupo_filter.set_value(None)
@@ -325,9 +327,9 @@ def home(user: User) -> None:
             None,
             on_toggle,
             props="""
-                    flat dense
-                    :label="props.row.active ? 'Inactivar' : 'Activar'"
-                    :color="props.row.active ? 'orange' : 'green'"
+                    flat dense round
+                    :icon="props.row.active ? 'check_circle' : 'cancel'"
+                    :color="props.row.active ? 'green' : 'grey-7'"
                 """,
             payload='props.row.reclamo_id',
         )
